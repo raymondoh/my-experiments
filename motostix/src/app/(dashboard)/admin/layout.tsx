@@ -1,11 +1,8 @@
 // src/app/(dashboard)/admin/layout.tsx
-import type React from "react";
-import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/siteConfig";
-import { createLogger } from "@/lib/logger";
-
-const log = createLogger("dashboard.admin.layout");
+import { requireAdmin } from "@/lib/guards/auth";
 
 export const metadata: Metadata = {
   // Admin-specific title template
@@ -86,20 +83,8 @@ export const metadata: Metadata = {
 // This layout uses auth() or headers(), so force dynamic rendering
 export const dynamic = "force-dynamic";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  try {
-    // Dynamic import to avoid build-time initialization
-    const { auth } = await import("@/auth");
-    const session = await auth();
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  await requireAdmin();
 
-    // Check if user is logged in and is an admin
-    if (!session?.user || session.user.role !== "admin") {
-      redirect("/not-authorized");
-    }
-
-    return <div className="admin-container">{children}</div>;
-  } catch (error) {
-    log.error("failed", error);
-    redirect("/not-authorized");
-  }
+  return <div className="admin-container">{children}</div>;
 }
