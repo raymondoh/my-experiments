@@ -20,6 +20,18 @@ type ExtendedUser = AdapterUser & {
   displayName?: string;
 };
 
+function sanitizeRelativePath(value?: string | null): string | null {
+  if (!value) {
+    return null;
+  }
+
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return null;
+  }
+
+  return value;
+}
+
 // Build-safe Firebase Admin config function
 function getFirebaseAdminConfig() {
   const projectId = process.env.FIREBASE_PROJECT_ID;
@@ -223,6 +235,35 @@ export const authOptions: NextAuthConfig = {
       }
 
       return session;
+    },
+
+    async redirect({ url, baseUrl }) {
+      try {
+        const parsed = new URL(url, baseUrl);
+
+        if (parsed.origin === baseUrl) {
+          const sameOriginTarget = sanitizeRelativePath(
+            `${parsed.pathname}${parsed.search}${parsed.hash}`
+          );
+
+          return sameOriginTarget ?? "/";
+        }
+
+        const callbackTarget =
+          sanitizeRelativePath(parsed.searchParams.get("callbackUrl")) ??
+          sanitizeRelativePath(parsed.searchParams.get("next"));
+
+        if (callbackTarget) {
+          return callbackTarget;
+        }
+      } catch {
+        const fallback = sanitizeRelativePath(url);
+        if (fallback) {
+          return fallback;
+        }
+      }
+
+      return "/";
     }
   },
   pages: {
