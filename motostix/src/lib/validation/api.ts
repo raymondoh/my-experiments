@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 // Shared primitives
+export const userId = z.string().min(1, "userId required");
 export const productId = z.string().min(1, "productId required");
 export const cursor = z.string().min(1).optional().nullable();
 export const limit = z.coerce.number().int().min(1).max(48).default(24);
@@ -14,6 +15,13 @@ export const q = z.string().min(1).optional();
 
 // GET /api/products query
 export const listProductsQuery = z.object({ q, category, onSale, limit, cursor, sort });
+
+export const listUsersQuery = z.object({
+  q: z.string().min(1).optional(),
+  limit,
+  cursor,
+  role: z.enum(["user", "admin", "any"]).default("any"),
+});
 
 // POST /api/products body (minimal — extend as your schema requires)
 export const createProductBody = z.object({
@@ -34,6 +42,10 @@ export const rateProductBody = z.object({
   productId: productId,
   rating: z.number().int().min(1).max(5),
 });
+
+export const likeBody = z.object({ productId });
+
+export const listLikedProductsQuery = z.object({ limit, cursor });
 
 // Helper: parse URLSearchParams with a schema
 export function parseSearchParams<T extends z.ZodTypeAny>(schema: T, sp: URLSearchParams) {
