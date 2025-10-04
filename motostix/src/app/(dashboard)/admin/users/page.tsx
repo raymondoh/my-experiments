@@ -1,22 +1,23 @@
 import type { Metadata } from "next";
-import { Separator } from "@/components/ui/separator";
-import { DashboardShell, DashboardHeader } from "@/components";
-import { UsersClient } from "@/components/dashboard/admin/users/UsersClient";
 import { redirect } from "next/navigation";
-import { UserService } from "@/lib/services/user-service";
-import type { SerializedUser } from "@/types/user/common";
+
+import { DashboardHeader, DashboardShell } from "@/components";
+import { Separator } from "@/components/ui/separator";
 import { createLogger } from "@/lib/logger";
+import { listUsers } from "@/lib/services/users";
+import { UserService } from "@/lib/services/user-service";
+
+import { UsersClient } from "./UsersClient";
 
 const log = createLogger("dashboard.admin.users");
 
 export const metadata: Metadata = {
   title: "Manage Users - Admin",
-  description: "View and manage all users in your application."
+  description: "View and manage all users in your application.",
 };
 
 export default async function AdminUsersPage() {
   try {
-    // Dynamic import for auth to avoid build-time issues
     const { auth } = await import("@/auth");
     const session = await auth();
 
@@ -24,34 +25,16 @@ export default async function AdminUsersPage() {
       redirect("/login");
     }
 
-    // Check admin role using UserService
-    const userId = session.user.id;
-    const userRole = await UserService.getUserRole(userId);
-
+    const userRole = await UserService.getUserRole(session.user.id);
     if (userRole !== "admin") {
       redirect("/not-authorized");
     }
 
-    // Fetch users using UserService directly - this is the best method
-    const usersResult = await UserService.getUsers(10);
-
-    if (!usersResult.success) {
-      log.error("fetch users failed", usersResult.error);
-      return (
-        <DashboardShell>
-          <DashboardHeader
-            title="User Management"
-            description="View and manage users in your application."
-            breadcrumbs={[{ label: "Home", href: "/" }, { label: "Admin", href: "/admin" }, { label: "Users" }]}
-          />
-          <Separator className="mb-8" />
-          <div className="p-4 bg-red-50 text-red-500 rounded-md">Error loading users: {usersResult.error}</div>
-        </DashboardShell>
-      );
-    }
-
-    const users = usersResult.data.users as SerializedUser[];
-    log.debug("fetched users", { count: users.length });
+    const initial = await listUsers({ limit: 24 });
+    log.debug("loaded initial users", {
+      count: initial.items.length,
+      hasNext: Boolean(initial.nextCursor),
+    });
 
     return (
       <DashboardShell>
@@ -61,14 +44,11 @@ export default async function AdminUsersPage() {
           breadcrumbs={[{ label: "Home", href: "/" }, { label: "Admin", href: "/admin" }, { label: "Users" }]}
         />
         <Separator className="mb-8" />
-
-        <div className="w-full overflow-hidden">
-          <UsersClient users={users} />
-        </div>
+        <UsersClient initial={initial} />
       </DashboardShell>
     );
   } catch (error) {
-    log.error("failed", error);
+    log.error("failed to render users page", error);
     redirect("/login");
   }
 }

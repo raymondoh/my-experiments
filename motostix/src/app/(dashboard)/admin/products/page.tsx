@@ -1,63 +1,39 @@
 import type { Metadata } from "next";
-import { Separator } from "@/components/ui/separator";
-import { DashboardShell, DashboardHeader } from "@/components";
 import { redirect } from "next/navigation";
-import { getAllProducts } from "@/firebase/admin/products";
-import { getCategories, getFeaturedCategories } from "@/firebase/admin/categories";
-import { UserService } from "@/lib/services/user-service";
-import { AdminProductsClient } from "@/components/dashboard/admin/products/AdminProductsClient";
+
+import { DashboardHeader, DashboardShell } from "@/components";
+import { Separator } from "@/components/ui/separator";
 import { createLogger } from "@/lib/logger";
+import { listProducts } from "@/lib/services/products";
+import { UserService } from "@/lib/services/user-service";
+
+import { ProductsClient } from "./ProductsClient";
 
 const log = createLogger("dashboard.admin.products");
 
 export const metadata: Metadata = {
   title: "Product Management",
-  description: "Manage products in your catalog"
+  description: "Manage products in your catalog",
 };
 
 export default async function AdminProductsPage() {
   try {
-    // Dynamic import for auth to avoid build-time issues
     const { auth } = await import("@/auth");
     const session = await auth();
 
-    // Redirect if not authenticated
     if (!session?.user) {
       redirect("/login");
     }
 
-    // Check admin role using UserService
-    const userRole = await UserService.getUserRole(session.user.id);
-    if (userRole !== "admin") {
+    const role = await UserService.getUserRole(session.user.id);
+    if (role !== "admin") {
       redirect("/not-authorized");
     }
 
-    // Fetch initial products data
-    const productsResult = await getAllProducts();
-    const products = productsResult.success ? productsResult.data : [];
-    log.debug("fetched products", { success: productsResult.success, count: products.length });
-
-    // Fetch categories data
-    const categoriesResult = await getCategories();
-    const categories = categoriesResult.success ? categoriesResult.data : [];
-    log.debug("fetched categories", { success: categoriesResult.success, count: categories.length });
-
-    // Fetch featured categories data
-    const featuredCategoriesResult = await getFeaturedCategories();
-
-    // Map the featured categories to include the id property
-    const featuredCategories = featuredCategoriesResult.success
-      ? featuredCategoriesResult.data.map(cat => ({
-          id: cat.slug, // Use slug as id
-          name: cat.name,
-          count: cat.count,
-          image: cat.image
-        }))
-      : [];
-
-    log.debug("fetched featured categories", {
-      success: featuredCategoriesResult.success,
-      count: featuredCategories.length,
+    const initial = await listProducts({ limit: 24 });
+    log.debug("loaded initial products", {
+      count: initial.items.length,
+      hasNext: Boolean(initial.nextCursor),
     });
 
     return (
@@ -68,19 +44,11 @@ export default async function AdminProductsPage() {
           breadcrumbs={[{ label: "Home", href: "/" }, { label: "Admin", href: "/admin" }, { label: "Products" }]}
         />
         <Separator className="mb-8" />
-
-        {/* Added a container with overflow handling */}
-        <div className="w-full overflow-hidden">
-          <AdminProductsClient
-            products={products}
-            categories={categories || []}
-            featuredCategories={featuredCategories}
-          />
-        </div>
+        <ProductsClient initial={initial} />
       </DashboardShell>
     );
   } catch (error) {
-    log.error("failed", error);
+    log.error("failed to render products page", error);
     redirect("/login");
   }
 }
