@@ -3,6 +3,9 @@ import { getOrderById } from "@/firebase/admin/orders";
 import { UserOrderDetailCard } from "@/components/dashboard/user/orders/UserOrderDetailCard";
 import { DashboardShell, DashboardHeader } from "@/components";
 import { Separator } from "@/components/ui/separator";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.orders.detail");
 
 export default async function UserOrderDetailPage({ params }: { params: Promise<{ id: string }> }) {
   try {
@@ -27,7 +30,7 @@ export default async function UserOrderDetailPage({ params }: { params: Promise<
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in UserOrderDetailPage:", error);
+    log.error("failed", error);
     return notFound();
   }
 }

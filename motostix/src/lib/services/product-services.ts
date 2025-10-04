@@ -2,6 +2,9 @@
 
 import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
 import { isFirebaseError, firebaseError } from "@/utils/firebase-error";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("services.product-maintenance");
 
 // Get product sample for debugging
 export async function getProductSample(limit = 5): Promise<any[]> {
@@ -26,7 +29,7 @@ export async function getProductSample(limit = 5): Promise<any[]> {
       ? error.message
       : "Unknown error occurred while fetching product sample";
 
-    console.error("Error fetching product sample:", message);
+    log.error("fetch sample failed", message);
     return [];
   }
 }
@@ -46,7 +49,7 @@ export async function fixMissingOnSaleField() {
 
       // Check if onSale field exists
       if (data.onSale === undefined || data.onSale === null) {
-        console.log(`Fixing product ${data.name}: adding onSale: false`);
+        log.debug("adding onSale flag", { productId: doc.id });
 
         updates.push(
           doc.ref.update({
@@ -61,9 +64,9 @@ export async function fixMissingOnSaleField() {
 
     if (updates.length > 0) {
       await Promise.all(updates);
-      console.log(`✅ Fixed ${fixedCount} products with missing onSale field`);
+      log.info("onSale field updated", { fixedCount, total: snapshot.docs.length });
     } else {
-      console.log("ℹ️ All products already have onSale field");
+      log.info("onSale already present", { total: snapshot.docs.length });
     }
 
     return {
@@ -80,7 +83,7 @@ export async function fixMissingOnSaleField() {
       ? error.message
       : "Unknown error occurred while fixing onSale field";
 
-    console.error("Error fixing onSale field:", message);
+    log.error("fix onSale failed", message);
     return {
       success: false,
       error: message

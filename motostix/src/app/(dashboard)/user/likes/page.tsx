@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { DashboardShell, DashboardHeader } from "@/components";
 import { Separator } from "@/components/ui/separator";
 import { UserLikesClient } from "@/components/dashboard/user/likes/UserLikesClient";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.likes");
 
 export const metadata: Metadata = {
   title: "Your Likes | MotoStix",
@@ -33,7 +36,7 @@ export default async function UserLikesPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in UserLikesPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

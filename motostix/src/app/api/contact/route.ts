@@ -3,9 +3,12 @@
 import { NextResponse } from "next/server";
 import { Resend } from "resend";
 import * as z from "zod";
+import { createLogger } from "@/lib/logger";
 
 // Initialize Resend with your API key from .env
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const log = createLogger("api.contact");
 
 // Define the schema for input validation using Zod
 const contactFormSchema = z.object({
@@ -22,6 +25,7 @@ export async function POST(req: Request) {
     // Validate the form data
     const validatedData = contactFormSchema.safeParse(body);
     if (!validatedData.success) {
+      log.warn("validation failed", { issueCount: validatedData.error.errors.length });
       return NextResponse.json({ error: "Invalid input.", details: validatedData.error.flatten() }, { status: 400 });
     }
 
@@ -47,13 +51,14 @@ export async function POST(req: Request) {
     });
 
     if (error) {
-      console.error({ error });
+      log.error("resend error", error);
       return NextResponse.json({ error: "Error sending message." }, { status: 500 });
     }
 
+    log.info("message sent");
     return NextResponse.json({ message: "Message sent successfully!" }, { status: 200 });
   } catch (error) {
-    console.error(error);
+    log.error("unexpected error", error);
     return NextResponse.json({ error: "An unexpected error occurred." }, { status: 500 });
   }
 }

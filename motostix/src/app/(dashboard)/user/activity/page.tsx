@@ -4,6 +4,9 @@ import { DashboardShell, DashboardHeader } from "@/components";
 import { UserActivityPageClient } from "@/components";
 import { fetchUserActivityLogs } from "@/actions/dashboard";
 import type { Firebase } from "@/types";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.activity");
 
 // Helper function to convert ActivityLog to SerializedActivity
 function convertToSerializedActivity(log: any): Firebase.SerializedActivity {
@@ -50,7 +53,7 @@ export default async function UserActivityPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in UserActivityPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

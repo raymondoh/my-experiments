@@ -124,6 +124,9 @@ import { getOrderById } from "@/firebase/admin/orders";
 import { UserService } from "@/lib/services/user-service";
 // 1. Import the formatPrice function
 import { formatPrice } from "@/lib/utils";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.orders.detail");
 // Remove TAX_RATE and SHIPPING_CONFIG as they are no longer used for calculation in this file.
 // import { TAX_RATE, SHIPPING_CONFIG } from "@/config/checkout";
 
@@ -231,7 +234,7 @@ export default async function AdminOrderDetailPage({ params }: { params: Promise
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminOrderDetailPage:", error);
+    log.error("failed", error);
     redirect("/admin/orders");
   }
 }

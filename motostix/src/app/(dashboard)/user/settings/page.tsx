@@ -4,6 +4,9 @@ import { DashboardShell, DashboardHeader } from "@/components";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
 import { NotificationForm } from "@/components/auth/NotificationForm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.settings");
 
 export default async function UserSettingsPage() {
   try {
@@ -55,7 +58,7 @@ export default async function UserSettingsPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in UserSettingsPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

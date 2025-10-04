@@ -7,6 +7,9 @@ import { redirect } from "next/navigation";
 import { fetchAllActivityLogs } from "@/actions/dashboard";
 import { UserService } from "@/lib/services/user-service";
 import type { Firebase } from "@/types"; // Make sure Firebase type is correctly imported from types/firebase
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.activity");
 
 export const metadata: Metadata = {
   title: "Activity Log - Admin",
@@ -32,9 +35,7 @@ export default async function AdminActivityPage() {
 
     // Highlight: Directly use result.logs, no more mapping needed
     const logs: Firebase.SerializedActivity[] = result.success ? result.logs : [];
-    console.log("LOGS:", logs);
-
-    console.log("[AdminActivityPage] Logs length:", logs.length);
+    log.debug("fetched activity logs", { success: result.success, count: logs.length });
 
     return (
       <DashboardShell>
@@ -51,7 +52,7 @@ export default async function AdminActivityPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminActivityPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

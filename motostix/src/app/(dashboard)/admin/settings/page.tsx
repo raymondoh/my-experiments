@@ -4,6 +4,9 @@ import { DashboardShell, DashboardHeader } from "@/components";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
 import { NotificationForm } from "@/components/auth/NotificationForm";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.settings");
 
 export default async function AdminSettingsPage() {
   try {
@@ -55,7 +58,7 @@ export default async function AdminSettingsPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminSettingsPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

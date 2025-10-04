@@ -1,6 +1,7 @@
 import type { Timestamp } from "firebase-admin/firestore";
 
 import { FieldPath, FieldValue, getAdminFirestore } from "@/lib/firebase/server";
+import { createLogger } from "@/lib/logger";
 
 export type ProductId = string;
 
@@ -81,6 +82,8 @@ const productCache = new Map<ProductId, CachedProduct>();
 
 const productsCollection = () => getAdminFirestore().collection("products");
 
+const log = createLogger("services.products");
+
 const toISO = (value: Timestamp | Date | string | null | undefined): string | undefined => {
   if (!value) {
     return undefined;
@@ -98,7 +101,7 @@ const toISO = (value: Timestamp | Date | string | null | undefined): string | un
   try {
     return value.toDate().toISOString();
   } catch (error) {
-    console.warn("[productsService] Failed to convert timestamp to ISO", error);
+    log.warn("toISO failed", { reason: "timestamp conversion" });
     return undefined;
   }
 };
@@ -265,7 +268,7 @@ const parseCursor = (cursor: string | null | undefined): unknown[] | null => {
     const decoded = Buffer.from(cursor, "base64url").toString("utf8");
     return JSON.parse(decoded) as unknown[];
   } catch (error) {
-    console.warn("[productsService] Failed to parse cursor", error);
+    log.warn("cursor parse failed", { cursorLength: cursor.length });
     return null;
   }
 };

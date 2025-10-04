@@ -3,6 +3,7 @@
 import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
 import { Timestamp } from "firebase-admin/firestore";
 import { isFirebaseError, firebaseError } from "@/utils/firebase-error";
+import { createLogger } from "@/lib/logger";
 
 export type LogLevel =
   | "info"
@@ -32,6 +33,7 @@ export async function logServerEvent({
   metadata = {},
   context = "general"
 }: LogEntry): Promise<void> {
+  const fallbackLogger = createLogger("services.logging");
   try {
     const db = getAdminFirestore();
     const log = {
@@ -50,27 +52,19 @@ export async function logServerEvent({
     const formattedMessage = `[${timestamp}] [${type.toUpperCase()}] [${context}] ${message}`;
     const hasMetadata = metadata && Object.keys(metadata).length > 0;
 
-    switch (type) {
-      case "error":
-        if (hasMetadata) {
-          console.error(formattedMessage, metadata);
-        } else {
-          console.error(formattedMessage);
-        }
+    const logContext = hasMetadata ? { metadata } : undefined;
+    switch (true) {
+      case type === "error":
+        fallbackLogger.error(formattedMessage, undefined, logContext);
         break;
-      case "warn":
-        if (hasMetadata) {
-          console.warn(formattedMessage, metadata);
-        } else {
-          console.warn(formattedMessage);
-        }
+      case type === "warn":
+        fallbackLogger.warn(formattedMessage, logContext);
+        break;
+      case type === "debug":
+        fallbackLogger.debug(formattedMessage, logContext);
         break;
       default:
-        if (hasMetadata) {
-          console.log(formattedMessage, metadata);
-        } else {
-          console.log(formattedMessage);
-        }
+        fallbackLogger.info(formattedMessage, logContext);
         break;
     }
   } catch (error) {
@@ -80,7 +74,8 @@ export async function logServerEvent({
       ? error.message
       : "Unknown error occurred while logging to Firestore";
 
-    console.error("[LOGGER_ERROR] Failed to write log to Firestore:", errorMessage);
-    console.error("Original log data:", { type, message, context, userId, metadata });
+    const errorLogger = createLogger("services.logging.error");
+    errorLogger.error("write to firestore failed", errorMessage);
+    errorLogger.error("log payload", undefined, { type, message, context, userId, metadata });
   }
 }

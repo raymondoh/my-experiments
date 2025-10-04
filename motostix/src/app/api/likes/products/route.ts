@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { getUserLikedProducts } from "@/firebase/admin/products";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api.likes.products");
 
 export async function GET() {
   try {
@@ -11,7 +14,7 @@ export async function GET() {
 
     // Check if session and user exist
     if (!session || !session.user || !session.user.id) {
-      console.log("[GET /api/likes/products] No valid session or user ID");
+      log.warn("unauthorized", { reason: "no-session" });
       return NextResponse.json(
         {
           success: false,
@@ -23,13 +26,13 @@ export async function GET() {
     }
 
     const userId = session.user.id;
-    console.log("[GET /api/likes/products] User ID:", userId);
+    log.debug("fetching liked products", { userId });
 
     // Get all liked products for the user
     const result = await getUserLikedProducts(userId);
 
     if (!result.success) {
-      console.error("[GET /api/likes/products] Error from getUserLikedProducts:", result.error);
+      log.error("fetch failed", result.error, { userId });
       return NextResponse.json(
         {
           success: false,
@@ -40,14 +43,14 @@ export async function GET() {
       );
     }
 
-    console.log(`[GET /api/likes/products] Found ${result.data.length} liked products for user ${userId}`);
+    log.info("liked products fetched", { userId, count: result.data.length });
 
     return NextResponse.json({
       success: true,
       products: result.data
     });
   } catch (error) {
-    console.error("[GET /api/likes/products] Error:", error);
+    log.error("unexpected error", error);
     return NextResponse.json(
       {
         success: false,

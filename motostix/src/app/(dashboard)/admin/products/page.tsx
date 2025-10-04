@@ -6,6 +6,9 @@ import { getAllProducts } from "@/firebase/admin/products";
 import { getCategories, getFeaturedCategories } from "@/firebase/admin/categories";
 import { UserService } from "@/lib/services/user-service";
 import { AdminProductsClient } from "@/components/dashboard/admin/products/AdminProductsClient";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.products");
 
 export const metadata: Metadata = {
   title: "Product Management",
@@ -32,10 +35,12 @@ export default async function AdminProductsPage() {
     // Fetch initial products data
     const productsResult = await getAllProducts();
     const products = productsResult.success ? productsResult.data : [];
+    log.debug("fetched products", { success: productsResult.success, count: products.length });
 
     // Fetch categories data
     const categoriesResult = await getCategories();
     const categories = categoriesResult.success ? categoriesResult.data : [];
+    log.debug("fetched categories", { success: categoriesResult.success, count: categories.length });
 
     // Fetch featured categories data
     const featuredCategoriesResult = await getFeaturedCategories();
@@ -49,6 +54,11 @@ export default async function AdminProductsPage() {
           image: cat.image
         }))
       : [];
+
+    log.debug("fetched featured categories", {
+      success: featuredCategoriesResult.success,
+      count: featuredCategories.length,
+    });
 
     return (
       <DashboardShell>
@@ -70,7 +80,7 @@ export default async function AdminProductsPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminProductsPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

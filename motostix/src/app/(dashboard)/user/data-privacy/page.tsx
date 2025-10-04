@@ -3,6 +3,9 @@ import { Separator } from "@/components/ui/separator";
 import { DashboardShell, DashboardHeader } from "@/components";
 import { DataExport } from "@/components/dashboard/user/data-privacy/DataExport";
 import { AccountDeletion } from "@/components/dashboard/user/data-privacy/AccountDeletion";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.data-privacy");
 
 export default async function DataPrivacyPage() {
   try {
@@ -34,7 +37,7 @@ export default async function DataPrivacyPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in DataPrivacyPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

@@ -4,22 +4,27 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import Stripe from "stripe";
 import type { CartItem } from "@/contexts/CartContext";
+import { createLogger } from "@/lib/logger";
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2025-05-28.basil"
 });
 
+const log = createLogger("api.checkout");
+
 export async function POST(req: Request) {
   try {
     const authSession = await auth();
     if (!authSession?.user?.id) {
+      log.warn("unauthorized");
       return NextResponse.json({ error: "Unauthorized: You must be logged in to make a purchase." }, { status: 401 });
     }
 
     const { items }: { items: CartItem[] } = await req.json();
 
     if (!items || items.length === 0) {
+      log.warn("empty cart", { userId: authSession.user.id });
       return NextResponse.json({ error: "Your cart is empty." }, { status: 400 });
     }
 
@@ -66,12 +71,13 @@ export async function POST(req: Request) {
     });
 
     if (stripeSession.url) {
+      log.info("checkout session created", { userId: authSession.user.id });
       return NextResponse.json({ url: stripeSession.url }, { status: 200 });
     } else {
       throw new Error("Could not create Stripe Checkout session.");
     }
   } catch (error: unknown) {
-    console.error("[STRIPE_ERROR]", error);
+    log.error("stripe error", error);
     const message = error instanceof Error ? error.message : "An unexpected error occurred.";
     return NextResponse.json({ error: message }, { status: 500 });
   }

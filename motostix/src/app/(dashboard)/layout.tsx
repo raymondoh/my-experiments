@@ -9,6 +9,9 @@ import { AppSidebar } from "@/components/dashboard/AppSidebar";
 import { headers } from "next/headers";
 import { ChevronLeft } from "lucide-react";
 import Link from "next/link";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.layout");
 
 export const metadata: Metadata = {
   // Dashboard-specific title template
@@ -84,15 +87,14 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const isAdminRoute = pathname.includes("/admin");
     const isUserRoute = pathname.includes("/user");
 
-    console.log("Dashboard Layout - Session data:", {
+    log.debug("session", {
       exists: !!session,
       userId: session?.user?.id,
-      userEmail: session?.user?.email,
-      userRole: session?.user?.role
+      userRole: session?.user?.role,
     });
 
     if (!session) {
-      console.log("Dashboard Layout - No session, redirecting to login");
+      log.info("redirect no-session");
       redirect("/login");
     }
 
@@ -100,18 +102,18 @@ export default async function DashboardLayout({ children }: { children: ReactNod
 
     // Role-based access control
     if (role === "admin" && isUserRoute) {
-      console.warn("Admin trying to access user route — redirecting to /admin");
+      log.warn("admin route mismatch", { pathname });
       redirect("/admin");
     }
 
     if (role === "user" && isAdminRoute) {
-      console.warn("User trying to access admin route — redirecting to /not-authorized");
+      log.warn("user route mismatch", { pathname });
       redirect("/not-authorized");
     }
 
     // Role-based redirects
     if (role !== "admin" && role !== "user") {
-      console.error(`Unknown role "${role}", redirecting to not-authorized`);
+      log.error("unknown role", undefined, { role });
       redirect("/not-authorized");
     }
 
@@ -120,7 +122,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     const sidebarCookie = cookieStore.get("sidebar:state");
     const sidebarState = sidebarCookie ? sidebarCookie.value === "true" : false;
 
-    console.log("Dashboard Layout - Sidebar state:", sidebarState);
+    log.debug("sidebar state", { sidebarState });
 
     return (
       <DashboardThemeProvider>
@@ -164,7 +166,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
       </DashboardThemeProvider>
     );
   } catch (error) {
-    console.error("Error in DashboardLayout:", error);
+    log.error("failed", error);
     redirect("/not-authorized");
   }
 }

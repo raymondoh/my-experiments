@@ -4,8 +4,11 @@ import Stripe from "stripe";
 import { paymentIntentBodySchema } from "@/schemas/ecommerce/stripe";
 import { DEFAULT_CURRENCY, TAX_RATE, SHIPPING_CONFIG } from "@/config/checkout";
 import { getProductById } from "@/firebase/admin/products"; // Import the server-side function to get product details
+import { createLogger } from "@/lib/logger";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2025-05-28.basil" });
+
+const log = createLogger("api.create-payment-intent");
 
 export async function POST(req: Request) {
   try {
@@ -27,6 +30,7 @@ export async function POST(req: Request) {
       const productResult = await getProductById(clientItem.id);
 
       if (!productResult.success || !productResult.product) {
+        log.warn("product lookup failed", { productId: clientItem.id });
         return NextResponse.json({ error: `Product with ID ${clientItem.id} not found.` }, { status: 404 });
       }
 
@@ -89,10 +93,11 @@ export async function POST(req: Request) {
     };
 
     const paymentIntent = await stripe.paymentIntents.create(paymentIntentParams);
+    log.info("payment intent created", { userId });
 
     return NextResponse.json({ clientSecret: paymentIntent.client_secret });
   } catch (error: any) {
-    console.error("[STRIPE_ERROR]", error);
+    log.error("stripe error", error);
     if (error.name === "ZodError") {
       return NextResponse.json(
         { error: "Invalid request data. Please check your shipping details.", details: error.errors },

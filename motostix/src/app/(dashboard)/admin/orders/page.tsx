@@ -5,6 +5,9 @@ import { AdminOrdersClient } from "@/components/dashboard/admin/orders/AdminOrde
 import { redirect } from "next/navigation";
 import { fetchAllOrders } from "@/actions/orders";
 import { UserService } from "@/lib/services/user-service";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.orders");
 
 export const metadata: Metadata = {
   title: "Order Management",
@@ -30,6 +33,7 @@ export default async function AdminOrdersPage() {
     // Fetch initial orders
     const result = await fetchAllOrders();
     const orders = result.success ? result.orders || [] : [];
+    log.debug("fetched orders", { success: result.success, count: orders.length });
 
     return (
       <DashboardShell>
@@ -46,7 +50,7 @@ export default async function AdminOrdersPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminOrdersPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

@@ -83,6 +83,7 @@
 import { NextResponse } from "next/server";
 import * as z from "zod";
 import { rateProduct } from "@/lib/services/products";
+import { createLogger } from "@/lib/logger";
 
 // Define the schema for a new rating submission
 const ratingSubmissionSchema = z.object({
@@ -92,13 +93,17 @@ const ratingSubmissionSchema = z.object({
   rating: z.number().int().min(1).max(5, { message: "Rating must be between 1 and 5." })
 });
 
+const log = createLogger("api.ratings");
+
 export async function POST(req: Request) {
   try {
     const body = await req.json();
     const validatedData = ratingSubmissionSchema.safeParse(body);
 
     if (!validatedData.success) {
-      console.error("Rating submission validation error:", validatedData.error.errors);
+      log.error("validation failed", validatedData.error, {
+        issueCount: validatedData.error.errors.length,
+      });
       return NextResponse.json({ error: "Invalid rating data provided." }, { status: 400 });
     }
 
@@ -106,9 +111,11 @@ export async function POST(req: Request) {
 
     const result = await rateProduct({ productId, userId, rating, authorName });
 
+    log.info("rating submitted", { productId, userId });
+
     return NextResponse.json({ message: "Rating submitted successfully!", rating: result }, { status: 200 });
   } catch (error: any) {
-    console.error("Failed to submit rating:", error);
+    log.error("submit failed", error);
     return NextResponse.json(
       { error: error.message || "An unexpected error occurred while submitting rating." },
       { status: 500 }

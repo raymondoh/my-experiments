@@ -15,6 +15,9 @@ import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
 import { UserService } from "@/lib/services/user-service";
 import { serializeData } from "@/utils";
 import type { SerializedActivity } from "@/types/firebase";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.overview");
 
 export const metadata: Metadata = {
   title: "Admin Dashboard",
@@ -39,11 +42,14 @@ export default async function AdminDashboardOverviewPage() {
 
     // Fetch activity logs using the new action
     const result = await fetchAllActivityLogs(10);
-    console.log("[AdminDashboardOverviewPage] fetchActivityLogs result:", result);
+    log.debug("fetched activity logs", {
+      success: result.success,
+      count: result.success ? result.logs.length : 0,
+    });
     // Highlight: Directly use result.logs, no more mapping needed
     const logs: SerializedActivity[] = result.success ? result.logs : [];
 
-    console.log("[AdminDashboardOverviewPage] Logs length:", logs.length);
+    log.debug("logs length", { count: logs.length });
 
     // Fetch system stats for the admin dashboard
     const systemStats = {
@@ -73,9 +79,16 @@ export default async function AdminDashboardOverviewPage() {
 
       const activitiesSnapshot = await db.collection("activity").count().get();
       systemStats.totalActivities = activitiesSnapshot.data().count;
-      console.log("ACTIVITIES:", activitiesSnapshot.data().count);
+      log.debug("system stats fetched", {
+        totals: {
+          users: systemStats.totalUsers,
+          activeUsers: systemStats.activeUsers,
+          newUsersToday: systemStats.newUsersToday,
+          totalActivities: systemStats.totalActivities,
+        },
+      });
     } catch (error) {
-      console.error("Error fetching system stats:", error);
+      log.error("system stats failed", error);
     }
 
     const serializedSystemStats = serializeData(systemStats);
@@ -120,7 +133,7 @@ export default async function AdminDashboardOverviewPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminDashboardOverviewPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

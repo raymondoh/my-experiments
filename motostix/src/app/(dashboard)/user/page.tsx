@@ -10,6 +10,9 @@ import { UserAccountPreview } from "@/components/dashboard/user/overview/UserAcc
 import { UserActivityPreview } from "@/components";
 import { Clock, UserIcon } from "lucide-react";
 import type { Firebase } from "@/types";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.overview");
 
 // Helper function to convert ActivityLog to SerializedActivity
 function convertToSerializedActivity(log: any): Firebase.SerializedActivity {
@@ -76,7 +79,7 @@ export default async function UserDashboardOverviewPage() {
         };
       }
     } catch (error) {
-      console.error("Error fetching Firestore user:", error);
+      log.error("firestore fetch failed", error, { userId });
       // Continue with fallback session data
     }
 
@@ -119,7 +122,7 @@ export default async function UserDashboardOverviewPage() {
       </>
     );
   } catch (error) {
-    console.error("Error in UserDashboardOverviewPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

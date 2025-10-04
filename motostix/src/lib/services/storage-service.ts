@@ -2,6 +2,9 @@
 
 import { getAdminStorage } from "@/lib/firebase/admin/initialize";
 import { isFirebaseError, firebaseError } from "@/utils/firebase-error";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("services.storage");
 
 export interface UploadFileOptions {
   file: File;
@@ -68,7 +71,7 @@ export async function uploadFile({ file, userId, userRole }: UploadFileOptions):
       ? error.message
       : "Unknown error occurred during file upload";
 
-    console.error("Storage service upload error:", message);
+    log.error("upload failed", message, { userId, userRole });
 
     return {
       success: false,
