@@ -1,0 +1,16 @@
+{
+  "name": "Plumbers Portal",
+  "short_name": "Plumbers Portal",
+  "description": "Find trusted, local plumbers across the UK with the Plumbers Portal. Post your job for free and receive competitive quotes from qualified tradespeople in your area.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/globe.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
