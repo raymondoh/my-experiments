@@ -15,11 +15,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { ProductDialog } from "./ProductDialog";
 
 export interface ProductColumnHandlers {
   onView?: (product: Product) => void;
-  onEdit?: (product: Product) => void;
   onDelete?: (product: Product) => void;
+  onMutate?: (options?: { reset?: boolean }) => void;
 }
 
 dayjs.extend(relativeTime);
@@ -163,9 +164,16 @@ export const createProductColumns = (
             <DropdownMenuItem onSelect={() => handlers.onView?.(product)}>
               <Eye className="mr-2 h-4 w-4" /> View
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => handlers.onEdit?.(product)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
-            </DropdownMenuItem>
+            <ProductDialog
+              mode="edit"
+              initialData={product}
+              onSuccess={handlers.onMutate}
+              trigger={
+                <DropdownMenuItem onSelect={event => event.preventDefault()}>
+                  <Pencil className="mr-2 h-4 w-4" /> Edit
+                </DropdownMenuItem>
+              }
+            />
             <DropdownMenuItem
               onSelect={() => handlers.onDelete?.(product)}
               className="text-destructive focus:text-destructive"

@@ -15,11 +15,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserDialog } from "./UserDialog";
 
 export interface UserColumnHandlers {
   onView?: (user: UserProfile) => void;
-  onEdit?: (user: UserProfile) => void;
   onDelete?: (user: UserProfile) => void;
+  onMutate?: (options?: { reset?: boolean }) => void;
 }
 
 dayjs.extend(relativeTime);
@@ -143,9 +144,16 @@ export const createUserColumns = (
             <DropdownMenuItem onSelect={() => handlers.onView?.(user)}>
               <Eye className="mr-2 h-4 w-4" /> View
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => handlers.onEdit?.(user)}>
-              <Pencil className="mr-2 h-4 w-4" /> Edit
-            </DropdownMenuItem>
+            <UserDialog
+              mode="edit"
+              initialData={user}
+              onSuccess={handlers.onMutate}
+              trigger={
+                <DropdownMenuItem onSelect={event => event.preventDefault()}>
+                  <Pencil className="mr-2 h-4 w-4" /> Edit
+                </DropdownMenuItem>
+              }
+            />
             <DropdownMenuItem onSelect={() => handlers.onDelete?.(user)} className="text-destructive focus:text-destructive">
               <Trash2 className="mr-2 h-4 w-4" /> Delete
             </DropdownMenuItem>

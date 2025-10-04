@@ -5,18 +5,10 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import type { ListResult, Product } from "@/lib/services/products";
-import { formatPrice } from "@/lib/format";
 import { DataTable, type PageChangeMeta } from "@/components/admin/DataTable";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { TableToolbar, type TableDensity } from "@/components/admin/TableToolbar";
 import { createProductColumns } from "./products-columns";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,10 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { ProductDialog } from "./ProductDialog";
 
 const PAGE_SIZE = 24;
 
@@ -69,8 +62,6 @@ export function ProductsClient({ initial }: ProductsClientProps) {
   const [sort, setSort] = React.useState<"new" | "priceAsc" | "priceDesc" | "rating">("new");
   const [density, setDensity] = React.useState<TableDensity>("comfortable");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [editingProduct, setEditingProduct] = React.useState<Product | null>(null);
-  const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [deletingProduct, setDeletingProduct] = React.useState<Product | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = React.useState(false);
 
@@ -177,6 +168,17 @@ export function ProductsClient({ initial }: ProductsClientProps) {
     [cursorStack.length, fetchPage],
   );
 
+  const refreshProducts = React.useCallback(
+    (options?: { reset?: boolean }) => {
+      const shouldReset = Boolean(options?.reset);
+      const currentCursor = cursorStack[cursorStack.length - 1] ?? null;
+      const targetCursor = shouldReset ? null : currentCursor;
+      void fetchPage(targetCursor ?? null, shouldReset ? { direction: "reset" } : {});
+      router.refresh();
+    },
+    [cursorStack, fetchPage, router],
+  );
+
   const previousCursor = cursorStack.length > 1 ? cursorStack[cursorStack.length - 2] ?? null : undefined;
 
   const totalHint = React.useMemo(() => {
@@ -188,11 +190,6 @@ export function ProductsClient({ initial }: ProductsClientProps) {
     }
     return `Showing ${rows.length} products`;
   }, [rows.length, nextCursor]);
-
-  const openEdit = React.useCallback((product: Product) => {
-    setEditingProduct(product);
-    setIsEditOpen(true);
-  }, []);
 
   const openDelete = React.useCallback((product: Product) => {
     setDeletingProduct(product);
@@ -216,23 +213,21 @@ export function ProductsClient({ initial }: ProductsClientProps) {
       toast.success("Product deleted");
       setIsDeleteOpen(false);
       setDeletingProduct(null);
-      const currentCursor = cursorStack[cursorStack.length - 1] ?? null;
-      await fetchPage(currentCursor ?? null, {});
-      router.refresh();
+      refreshProducts();
     } catch (error) {
       console.error("Failed to delete product", error);
       toast.error("Failed to delete product. Please try again.");
     }
-  }, [cursorStack, deletingProduct, fetchPage, router]);
+  }, [deletingProduct, refreshProducts]);
 
   const columns = React.useMemo(
     () =>
       createProductColumns({
         onView: product => router.push(`/admin/products/${product.id}`),
-        onEdit: openEdit,
         onDelete: openDelete,
+        onMutate: refreshProducts,
       }),
-    [router, openEdit, openDelete],
+    [router, openDelete, refreshProducts],
   );
 
   return (
@@ -268,59 +263,29 @@ export function ProductsClient({ initial }: ProductsClientProps) {
                 On sale only
               </Label>
             </div>
-            <div className="w-40">
-              <Select value={sort} onValueChange={value => setSort(value as typeof sort)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sort" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="new">Newest</SelectItem>
-                  <SelectItem value="priceAsc">Price: Low to High</SelectItem>
-                  <SelectItem value="priceDesc">Price: High to Low</SelectItem>
-                  <SelectItem value="rating">Rating</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2">
+              <div className="w-40">
+                <Select value={sort} onValueChange={value => setSort(value as typeof sort)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Sort" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="new">Newest</SelectItem>
+                    <SelectItem value="priceAsc">Price: Low to High</SelectItem>
+                    <SelectItem value="priceDesc">Price: High to Low</SelectItem>
+                    <SelectItem value="rating">Rating</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <ProductDialog
+                mode="create"
+                onSuccess={refreshProducts}
+                trigger={<Button size="sm">Add product</Button>}
+              />
             </div>
           </TableToolbar>
         )}
       />
-
-      <Sheet
-        open={isEditOpen}
-        onOpenChange={open => {
-          setIsEditOpen(open);
-          if (!open) {
-            setEditingProduct(null);
-          }
-        }}
-      >
-        <SheetContent className="flex flex-col gap-4">
-          <SheetHeader>
-            <SheetTitle>Edit product</SheetTitle>
-            <SheetDescription>
-              TODO: Build product editor for <span className="font-semibold">{editingProduct?.name}</span>.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>Add your edit form here. You can prefill it with the selected product.</p>
-            <div className="rounded-md border p-4">
-              <p className="font-medium text-foreground">Product summary</p>
-              <p>Name: {editingProduct?.name ?? "Unknown"}</p>
-              <p>Category: {editingProduct?.category ?? "—"}</p>
-              <p>
-                Price: {editingProduct ? formatPrice(editingProduct.price) : "—"}
-              </p>
-            </div>
-          </div>
-          <div className="mt-auto flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled>Save changes</Button>
-          </div>
-        </SheetContent>
-      </Sheet>
-
       <AlertDialog
         open={isDeleteOpen}
         onOpenChange={open => {
