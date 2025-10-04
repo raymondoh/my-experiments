@@ -1,36 +1,78 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { fetchUserOrders } from "@/actions/orders";
-import { auth } from "@/auth";
-import { logger } from "@/utils/logger";
+import { z } from "zod";
 
-export async function GET() {
+import { auth } from "@/auth";
+import { createLogger } from "@/lib/logger";
+import { listOrders, type OrderStatus } from "@/lib/services/orders";
+
+const log = createLogger("api.orders");
+
+const orderStatusSchema = z.enum([
+  "created",
+  "paid",
+  "processing",
+  "shipped",
+  "delivered",
+  "canceled",
+  "refunded",
+  "failed",
+  "any",
+]);
+
+const querySchema = z.object({
+  limit: z
+    .string()
+    .optional()
+    .refine((value) => value === undefined || /^\d+$/.test(value), {
+      message: "limit must be a positive integer",
+    })
+    .transform((value) => (value === undefined ? undefined : Number.parseInt(value, 10)))
+    .refine((value) => value === undefined || (Number.isInteger(value) && value > 0), {
+      message: "limit must be a positive integer",
+    }),
+  cursor: z.string().optional(),
+  status: orderStatusSchema.optional(),
+  userId: z.string().optional(),
+});
+
+export async function GET(request: NextRequest) {
   try {
     const session = await auth();
-
-    // It's still good practice to ensure there's a session before calling the action
     if (!session?.user?.id) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // --- THIS IS THE FIX ---
-    // Call fetchUserOrders without any arguments.
-    // The action itself will get the user ID from the session.
-    const { success, orders, error } = await fetchUserOrders();
+    const isAdmin = session.user.role === "admin";
+    const searchParams = Object.fromEntries(request.nextUrl.searchParams.entries());
+    const parseResult = querySchema.safeParse(searchParams);
 
-    if (!success) {
-      return NextResponse.json({ success: false, error }, { status: 500 });
+    if (!parseResult.success) {
+      log.warn("invalid query params", { issues: parseResult.error.issues });
+      return NextResponse.json(
+        {
+          error: "Invalid query parameters",
+          details: parseResult.error.flatten(),
+        },
+        { status: 400 },
+      );
     }
 
-    // Return the orders as JSON
-    return NextResponse.json({ success: true, orders });
-  } catch (error) {
-    logger({
-      type: "error",
-      message: "Error fetching orders from API",
-      metadata: { error },
-      context: "api-orders"
+    const { limit, cursor, status, userId } = parseResult.data;
+
+    const statusFilter = (status ?? "any") as OrderStatus | "any";
+    const resolvedUserId = isAdmin ? userId ?? undefined : session.user.id;
+
+    const orders = await listOrders({
+      userId: resolvedUserId,
+      limit,
+      cursor: cursor ?? null,
+      status: statusFilter,
     });
 
-    return NextResponse.json({ success: false, error: "Failed to fetch orders" }, { status: 500 });
+    return NextResponse.json(orders);
+  } catch (error) {
+    log.error("failed to list orders", error);
+    return NextResponse.json({ error: "Failed to fetch orders" }, { status: 500 });
   }
 }
