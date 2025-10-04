@@ -1,6 +1,0 @@
-[submodule "plumbers-portal"]
-	path = plumbers-portal
-	url = https://github.com/raymondoh/plumbers-portal
-[submodule "motostix"]
-	path = motostix
-	url = https://github.com/raymondoh/motostix
