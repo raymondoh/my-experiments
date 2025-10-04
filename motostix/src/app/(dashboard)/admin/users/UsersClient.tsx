@@ -11,13 +11,6 @@ import { EmptyState } from "@/components/admin/EmptyState";
 import { TableToolbar, type TableDensity } from "@/components/admin/TableToolbar";
 import { createUserColumns } from "./users-columns";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -28,6 +21,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import { UserDialog } from "./UserDialog";
 
 const PAGE_SIZE = 24;
 
@@ -55,8 +49,6 @@ export function UsersClient({ initial }: UsersClientProps) {
   const [roleFilter, setRoleFilter] = React.useState<"any" | "admin" | "user">("any");
   const [density, setDensity] = React.useState<TableDensity>("comfortable");
   const [isLoading, setIsLoading] = React.useState(false);
-  const [editingUser, setEditingUser] = React.useState<UserProfile | null>(null);
-  const [isEditOpen, setIsEditOpen] = React.useState(false);
   const [deletingUser, setDeletingUser] = React.useState<UserProfile | null>(null);
   const [isDeleteOpen, setIsDeleteOpen] = React.useState(false);
 
@@ -141,6 +133,17 @@ export function UsersClient({ initial }: UsersClientProps) {
     [cursorStack.length, fetchPage],
   );
 
+  const refreshUsers = React.useCallback(
+    (options?: { reset?: boolean }) => {
+      const shouldReset = Boolean(options?.reset);
+      const currentCursor = cursorStack[cursorStack.length - 1] ?? null;
+      const targetCursor = shouldReset ? null : currentCursor;
+      void fetchPage(targetCursor ?? null, shouldReset ? { direction: "reset" } : {});
+      router.refresh();
+    },
+    [cursorStack, fetchPage, router],
+  );
+
   const previousCursor = cursorStack.length > 1 ? cursorStack[cursorStack.length - 2] ?? null : undefined;
 
   const totalHint = React.useMemo(() => {
@@ -152,11 +155,6 @@ export function UsersClient({ initial }: UsersClientProps) {
     }
     return `Showing ${rows.length} users`;
   }, [rows.length, nextCursor]);
-
-  const openEdit = React.useCallback((user: UserProfile) => {
-    setEditingUser(user);
-    setIsEditOpen(true);
-  }, []);
 
   const openDelete = React.useCallback((user: UserProfile) => {
     setDeletingUser(user);
@@ -181,10 +179,10 @@ export function UsersClient({ initial }: UsersClientProps) {
     () =>
       createUserColumns({
         onView: user => router.push(`/admin/users/${user.id}`),
-        onEdit: openEdit,
         onDelete: openDelete,
+        onMutate: refreshUsers,
       }),
-    [router, openEdit, openDelete],
+    [router, openDelete, refreshUsers],
   );
 
   return (
@@ -214,43 +212,15 @@ export function UsersClient({ initial }: UsersClientProps) {
             ]}
             density={density}
             onDensityChange={setDensity}
-          />
+          >
+            <UserDialog
+              mode="create"
+              onSuccess={refreshUsers}
+              trigger={<Button size="sm">Add user</Button>}
+            />
+          </TableToolbar>
         )}
       />
-
-      <Sheet
-        open={isEditOpen}
-        onOpenChange={open => {
-          setIsEditOpen(open);
-          if (!open) {
-            setEditingUser(null);
-          }
-        }}
-      >
-        <SheetContent className="flex flex-col gap-4">
-          <SheetHeader>
-            <SheetTitle>Edit user</SheetTitle>
-            <SheetDescription>
-              TODO: Implement editing for <span className="font-semibold">{editingUser?.name ?? editingUser?.email}</span>.
-            </SheetDescription>
-          </SheetHeader>
-          <div className="space-y-3 text-sm text-muted-foreground">
-            <p>This is a placeholder form. Hook up your user editor here.</p>
-            <div className="rounded-md border p-4">
-              <p className="font-medium text-foreground">User summary</p>
-              <p>Name: {editingUser?.name ?? "Unknown"}</p>
-              <p>Email: {editingUser?.email ?? "—"}</p>
-              <p>Role: {editingUser?.role ?? "user"}</p>
-            </div>
-          </div>
-          <div className="mt-auto flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>
-              Cancel
-            </Button>
-            <Button disabled>Save changes</Button>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       <AlertDialog
         open={isDeleteOpen}
