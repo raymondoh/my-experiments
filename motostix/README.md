@@ -149,6 +149,37 @@ The Firebase Web SDK does not automatically read these host variables. In `src/l
 3. Copy the webhook signing secret displayed by the CLI and place it in `STRIPE_WEBHOOK_SECRET` in `.env.local`.
 4. Use your test keys (`sk_test_*` and `pk_test_*`) while developing. The CLI will replay events each time you run the listener.
 
+### Checkout success flow testing
+
+The checkout success page now verifies the Stripe session server-side and fetches the synced order from Firestore. To exercise the flow end-to-end:
+
+1. Start the Stripe CLI forwarding events so webhook events reach your local server:
+   ```bash
+   stripe listen --forward-to localhost:3000/api/webhooks/stripe
+   ```
+2. Create a test Checkout Session against the `/api/checkout` endpoint (replace the cookie and product payload with values valid for your environment):
+   ```bash
+   curl -X POST http://localhost:3000/api/checkout \
+     -H "Content-Type: application/json" \
+     -H "Cookie: next-auth.session-token=<your-session-token>" \
+     -d '{
+       "items": [
+         {
+           "product": {
+             "id": "demo-product",
+             "name": "Demo Moto Helmet",
+             "price": 199.99,
+             "description": "Track-ready protection",
+             "image": "https://example.com/helmet.jpg",
+             "onSale": false
+           },
+           "quantity": 1
+         }
+       ]
+     }'
+   ```
+3. After Stripe redirects you back, open the URL `http://localhost:3000/checkout/success?session_id=<CHECKOUT_SESSION_ID>` to see the confirmed order summary.
+
 ## Email (Resend)
 
 Create a project in the [Resend dashboard](https://resend.com) and verify your sending domain. Once verified, generate an API key and save it as `RESEND_API_KEY`. You can add test email addresses in Resend to avoid sending to real users during development.

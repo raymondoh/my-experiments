@@ -39,6 +39,6 @@ describe("GET /api/products", () => {
     expect(response.status).toBe(200);
 
     const body = await response.json();
-    expect(body).toEqual({ success: true, data: mockItems, nextCursor: "cursor-123" });
+    expect(body).toEqual({ ok: true, data: { items: mockItems, nextCursor: "cursor-123" } });
   });
 });

@@ -1,101 +1,179 @@
-// src/app/(root)/checkout/success/page.tsx
-import { Suspense } from "react";
-import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import Link from "next/link";
+import type Stripe from "stripe";
 
-import { CheckoutSuccessClient } from "@/components/checkout/CheckoutSuccessClient";
-import { getOrderByStripeCheckoutSessionId, getOrderByStripePaymentIntentId } from "@/lib/services/orders";
-import { siteConfig } from "@/config/siteConfig";
+import { ClearCartClient } from "@/components/checkout/ClearCartClient";
+import { OrderSummary } from "@/components/checkout/OrderSummary";
+import { Button } from "@/components/ui/button";
+import { createLogger } from "@/lib/logger";
+import { pageMetadata } from "@/lib/seo";
+import { getCheckoutSession } from "@/lib/stripe/server";
+import {
+  getOrderByStripeCheckoutSessionId,
+  getOrderByStripePaymentIntentId,
+  type Order,
+} from "@/lib/services/orders";
 
-export const metadata: Metadata = {
-  title: `Order Confirmation | ${siteConfig.name}`,
-  description: "Thank you for your order! Your purchase has been confirmed.",
+export const metadata = {
+  ...pageMetadata({ title: "Order confirmed", path: "/checkout/success" }),
   robots: {
     index: false,
     follow: false,
-    noarchive: true,
-    nosnippet: true,
-    googleBot: {
-      index: false,
-      follow: false,
-      noarchive: true,
-      nosnippet: true,
-    },
-  },
-  other: {
-    referrer: "strict-origin-when-cross-origin",
-    "cache-control": "no-cache, no-store, must-revalidate",
   },
 };
 
-function CheckoutSuccessFallback() {
-  return (
-    <div className="w-full max-w-md px-4 sm:px-6 mx-auto py-12">
-      <div className="flex flex-col items-center justify-center space-y-4 text-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
-        <p className="text-lg text-muted-foreground">Loading order details...</p>
-      </div>
-    </div>
-  );
-}
+export const revalidate = 5;
 
-interface CheckoutSuccessPageProps {
+const log = createLogger("app.checkout.success");
+const RETRY_DELAY_MS = 1000;
+
+type CheckoutSuccessPageProps = {
   searchParams: Record<string, string | string[] | undefined>;
-}
+};
 
-async function resolveOrderId(searchParams: CheckoutSuccessPageProps["searchParams"]): Promise<string | null> {
-  const sessionId = typeof searchParams?.session_id === "string" ? searchParams.session_id : undefined;
-  if (sessionId) {
-    const order = await getOrderByStripeCheckoutSessionId(sessionId);
-    if (order) {
-      return order.id;
-    }
+const getFirstParam = (value: string | string[] | undefined): string | undefined => {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+  return value;
+};
+
+const isSessionComplete = (session: Stripe.Checkout.Session): boolean => {
+  const paymentStatus = session.payment_status;
+  return (
+    paymentStatus === "paid" ||
+    paymentStatus === "no_payment_required" ||
+    session.status === "complete"
+  );
+};
+
+const resolvePaymentIntentId = (session: Stripe.Checkout.Session): string | null => {
+  const paymentIntent = session.payment_intent;
+  if (!paymentIntent) {
+    return null;
   }
 
-  const paymentIntentIdParam =
-    (typeof searchParams?.payment_intent === "string" && searchParams.payment_intent) ||
-    (typeof searchParams?.payment_intent_id === "string" && searchParams.payment_intent_id);
+  return typeof paymentIntent === "string" ? paymentIntent : paymentIntent.id ?? null;
+};
 
-  if (paymentIntentIdParam) {
-    const order = await getOrderByStripePaymentIntentId(paymentIntentIdParam);
-    if (order) {
-      return order.id;
-    }
+async function findOrderForSession(session: Stripe.Checkout.Session): Promise<Order | null> {
+  const fromSession = await getOrderByStripeCheckoutSessionId(session.id);
+  if (fromSession) {
+    return fromSession;
   }
 
-  const paymentIntentClientSecret =
-    typeof searchParams?.payment_intent_client_secret === "string"
-      ? searchParams.payment_intent_client_secret
-      : undefined;
-
-  if (paymentIntentClientSecret) {
-    const [paymentIntentId] = paymentIntentClientSecret.split("_secret");
-    if (paymentIntentId) {
-      const order = await getOrderByStripePaymentIntentId(paymentIntentId);
-      if (order) {
-        return order.id;
-      }
-    }
+  const paymentIntentId = resolvePaymentIntentId(session);
+  if (paymentIntentId) {
+    return getOrderByStripePaymentIntentId(paymentIntentId);
   }
 
   return null;
 }
 
+async function wait(ms: number) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function PageContainer({ children }: { children: ReactNode }) {
+  return (
+    <main className="mx-auto flex min-h-[70vh] w-full items-center justify-center px-6 py-16">
+      <ClearCartClient />
+      {children}
+    </main>
+  );
+}
+
+function MissingSessionMessage() {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 text-center">
+      <p className="text-lg font-medium">No checkout session found.</p>
+      <p className="text-sm text-muted-foreground">
+        If you completed a purchase, check your email for a receipt or return home to start a new order.
+      </p>
+      <Button asChild>
+        <Link href="/">Return home</Link>
+      </Button>
+    </div>
+  );
+}
+
+function PendingPaymentMessage() {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 text-center">
+      <p className="text-lg font-medium">Payment is still processing</p>
+      <p className="text-sm text-muted-foreground">
+        We&apos;re waiting for Stripe to confirm your payment. This page will refresh automatically, or you can check back in a
+        moment.
+      </p>
+      <Button asChild variant="outline">
+        <Link href="/">Back to home</Link>
+      </Button>
+    </div>
+  );
+}
+
+function FinalizingOrderMessage() {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 text-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden="true" />
+      <p className="text-lg font-medium">Finalizing your order…</p>
+      <p className="text-sm text-muted-foreground">
+        We&apos;re syncing with our order system. This page refreshes about every 5 seconds until your receipt is ready.
+      </p>
+    </div>
+  );
+}
+
 export default async function CheckoutSuccessPage({ searchParams }: CheckoutSuccessPageProps) {
-  const orderId = await resolveOrderId(searchParams);
+  const sessionId = getFirstParam(searchParams.session_id);
+
+  if (!sessionId) {
+    return (
+      <PageContainer>
+        <MissingSessionMessage />
+      </PageContainer>
+    );
+  }
+
+  const session = await getCheckoutSession(sessionId);
+
+  if (!session) {
+    log.warn("checkout session not found", { sessionId });
+    return (
+      <PageContainer>
+        <MissingSessionMessage />
+      </PageContainer>
+    );
+  }
+
+  if (!isSessionComplete(session)) {
+    return (
+      <PageContainer>
+        <PendingPaymentMessage />
+      </PageContainer>
+    );
+  }
+
+  let order = await findOrderForSession(session);
+
+  if (!order) {
+    await wait(RETRY_DELAY_MS);
+    order = await findOrderForSession(session);
+  }
+
+  if (!order) {
+    return (
+      <PageContainer>
+        <FinalizingOrderMessage />
+      </PageContainer>
+    );
+  }
 
   return (
-    <main className="min-h-screen">
-      <section className="py-12 md:py-16 w-full bg-background">
-        <div className="container mx-auto px-4">
-          <div className="max-w-2xl mx-auto">
-            <div className="bg-white dark:bg-secondary rounded-xl shadow-sm border border-border/40 p-6 md:p-8">
-              <Suspense fallback={<CheckoutSuccessFallback />}>
-                <CheckoutSuccessClient orderId={orderId} />
-              </Suspense>
-            </div>
-          </div>
-        </div>
-      </section>
-    </main>
+    <PageContainer>
+      <OrderSummary order={order} />
+    </PageContainer>
   );
 }
