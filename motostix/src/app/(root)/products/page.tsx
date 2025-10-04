@@ -7,8 +7,9 @@ import { ProductsGrid } from "@/components/products/ProductsGrid";
 import { ProductFilters } from "@/components/products/filters/ProductFilters";
 import { CategoryCardsWrapper } from "@/components/products/category-carousel/CategoryCardsWrapper";
 import { SubcategoryCardsWrapper } from "@/components/products/subcategory-carousel/SubcategoryCardsWrapper";
-import { getAllProducts } from "@/firebase/admin/products";
 import { getCategories } from "@/firebase/admin/categories";
+import type { Product as LegacyProduct } from "@/types/product/product";
+import { listProducts, type ListParams, type Product as ServiceProduct } from "@/lib/services/products";
 import {
   type CategoryData,
   categoriesToData as convertCategoryNamesToData,
@@ -183,30 +184,84 @@ const ProductsPage = async ({ searchParams }: ProductsPageProps) => {
       isCustomizable
     );
 
-    // Fetch initial products
-    // NEW: Pass the searchQuery to getAllProducts
-    const productsResult = await getAllProducts({
+    const parseSort = (value: string | string[] | undefined): ListParams["sort"] => {
+      if (typeof value !== "string") {
+        return undefined;
+      }
+
+      if (value === "priceAsc" || value === "priceDesc" || value === "rating" || value === "new") {
+        return value;
+      }
+
+      return undefined;
+    };
+
+    const initialListParams: ListParams = {
+      q: searchQuery,
       category: currentCategory,
-      subcategory: currentSubcategory,
-      query: searchQuery,
-      designThemes,
       onSale,
-      isCustomizable
+      sort: parseSort(resolvedSearchParams?.sort),
+      cursor: typeof resolvedSearchParams?.cursor === "string" ? resolvedSearchParams.cursor : null,
+    };
+
+    const listResult = await listProducts(initialListParams);
+
+    const transformProduct = (product: ServiceProduct): LegacyProduct => ({
+      id: product.id,
+      slug: product.slug,
+      name: product.name,
+      description: product.description,
+      details: product.details,
+      sku: product.sku,
+      barcode: product.barcode,
+      category: product.category,
+      subcategory: product.subcategory,
+      designThemes: product.designThemes,
+      productType: product.productType,
+      tags: product.tags,
+      brand: product.brand,
+      manufacturer: product.manufacturer,
+      dimensions: product.dimensions,
+      weight: product.weight,
+      shippingWeight: product.shippingWeight,
+      material: product.material,
+      finish: product.finish,
+      color: product.color,
+      baseColor: product.baseColor,
+      colorDisplayName: product.colorDisplayName,
+      stickySide: product.stickySide as LegacyProduct["stickySide"],
+      size: product.size,
+      image: product.image ?? product.images[0] ?? "/placeholder.svg",
+      additionalImages: product.additionalImages,
+      images: product.images,
+      placements: product.placements,
+      price: product.price,
+      salePrice: product.salePrice ?? undefined,
+      onSale: product.onSale ?? false,
+      costPrice: product.costPrice,
+      stockQuantity: product.stockQuantity,
+      lowStockThreshold: product.lowStockThreshold,
+      shippingClass: product.shippingClass as LegacyProduct["shippingClass"],
+      inStock: product.inStock ?? true,
+      badge: product.badge,
+      isFeatured: product.isFeatured,
+      isHero: product.isHero,
+      isLiked: product.isLiked,
+      isCustomizable: product.isCustomizable,
+      isNewArrival: product.isNewArrival,
+      averageRating: product.ratingAvg ?? product.averageRating ?? 0,
+      reviewCount: product.ratingCount ?? product.reviewCount ?? 0,
+      createdAt: product.createdAtISO,
+      updatedAt: product.updatedAtISO,
     });
 
-    const initialProducts = productsResult.success ? productsResult.data || [] : [];
-
-    if (!productsResult.success) {
-      console.error("ProductsPage - Error fetching initial products:", productsResult.error);
-    }
-
-    console.log("ProductsPage - initialProducts count after getAllProducts:", initialProducts.length);
+    const initialProducts = listResult.items.map(transformProduct);
 
     if (initialProducts.length === 0 && (currentCategory || currentSubcategory || searchQuery)) {
-      console.warn("ProductsPage - WARNING: getAllProducts returned no items for the selected criteria:", {
+      console.warn("ProductsPage - WARNING: listProducts returned no items for the selected criteria:", {
         category: currentCategory,
         subcategory: currentSubcategory,
-        query: searchQuery // NEW: Include query in warning
+        query: searchQuery,
       });
     }
 
