@@ -1,8 +1,26 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/siteConfig";
-import { LoginForm } from "@/components/auth/LoginForm";
 import { LoginRedirect } from "@/components/auth/LoginRedirect";
 import { AuthHeader } from "@/components/auth/AuthHeader";
+import LoginForm from "./LoginForm";
+
+type LoginPageProps = {
+  searchParams?: {
+    next?: string;
+  };
+};
+
+function sanitizeNext(value?: string): string {
+  if (typeof value !== "string" || value.length === 0) {
+    return "/";
+  }
+
+  if (!value.startsWith("/") || value.startsWith("//")) {
+    return "/";
+  }
+
+  return value;
+}
 
 export const metadata: Metadata = {
   title: `Sign In to Your Account | ${siteConfig.name}`,
@@ -69,7 +87,10 @@ export const metadata: Metadata = {
   }
 };
 
-export default function LoginPage() {
+export default function LoginPage({ searchParams }: LoginPageProps) {
+  const rawNext = searchParams?.next;
+  const next = sanitizeNext(rawNext);
+
   return (
     <>
       <LoginRedirect />
@@ -78,7 +99,7 @@ export default function LoginPage() {
           title="Welcome Back"
           subtitle="Sign in to your account to access your dashboard, orders, and more"
         />
-        <LoginForm />
+        <LoginForm next={next} />
       </div>
     </>
   );
