@@ -1,61 +1,69 @@
 // src/app/api/products/route.ts
 import { type NextRequest, NextResponse } from "next/server";
-import { getAllProducts, addProduct } from "@/firebase/admin/products";
-import type { Product } from "@/types";
+import { z } from "zod";
+import { listProducts, createProduct, getProductById } from "@/lib/services/products";
 import { logActivity } from "@/firebase/actions";
+
+const listParamsSchema = z.object({
+  q: z.string().optional(),
+  category: z.string().optional(),
+  onSale: z
+    .enum(["true", "false"]) // convert string booleans
+    .transform(value => value === "true")
+    .optional(),
+  limit: z
+    .string()
+    .transform(value => Number.parseInt(value, 10))
+    .pipe(z.number().int().positive().max(100))
+    .optional(),
+  cursor: z.string().optional(),
+  sort: z.enum(["new", "priceAsc", "priceDesc", "rating"]).optional(),
+});
+
+type ListParamsInput = z.infer<typeof listParamsSchema>;
+
+const parseListParams = (searchParams: URLSearchParams) => {
+  const raw: Record<string, string | undefined> = {
+    q: searchParams.get("q") ?? undefined,
+    category: searchParams.get("category") ?? undefined,
+    onSale: searchParams.get("onSale") ?? undefined,
+    limit: searchParams.get("limit") ?? undefined,
+    cursor: searchParams.get("cursor") ?? undefined,
+    sort: searchParams.get("sort") ?? undefined,
+  };
+
+  const result = listParamsSchema.safeParse(raw);
+
+  if (!result.success) {
+    throw new Error(result.error.message);
+  }
+
+  const data: ListParamsInput = result.data;
+
+  return {
+    q: data.q,
+    category: data.category,
+    onSale: data.onSale,
+    limit: data.limit,
+    cursor: data.cursor ?? null,
+    sort: data.sort,
+  } satisfies Parameters<typeof listProducts>[0];
+};
 
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
-    // Helper to get boolean from search params
-    const getBooleanParam = (param: string | null): boolean | undefined => {
-      if (param === null) return undefined;
-      return param === "true";
-    };
+    let params;
+    try {
+      params = parseListParams(searchParams);
+    } catch (error) {
+      console.error("Error parsing list params", error);
+      return NextResponse.json({ success: false, error: "Invalid query parameters" }, { status: 400 });
+    }
 
-    // Helper to get array from comma-separated search params
-    const getArrayParam = (param: string | null): string[] | undefined => {
-      if (param === null) return undefined;
-      return param
-        .split(",")
-        .map(s => s.trim())
-        .filter(s => s.length > 0);
-    };
-
-    const filters: Product.ProductFilterOptions = {
-      // Existing filters
-      category: searchParams.get("category") || undefined,
-      subcategory: searchParams.get("subcategory") || undefined,
-      material: searchParams.get("material") || undefined,
-      priceRange: searchParams.get("priceRange") || undefined,
-      isFeatured: getBooleanParam(searchParams.get("isFeatured")),
-      stickySide: searchParams.get("stickySide") || undefined,
-
-      // Newly added filters from ProductFilterOptions
-      designThemes: getArrayParam(searchParams.get("designThemes")),
-      productType: searchParams.get("productType") || undefined,
-      finish: searchParams.get("finish") || undefined,
-      placements: getArrayParam(searchParams.get("placements")),
-      isCustomizable: getBooleanParam(searchParams.get("isCustomizable")),
-      brand: searchParams.get("brand") || undefined,
-      tags: getArrayParam(searchParams.get("tags")),
-      onSale: getBooleanParam(searchParams.get("onSale")),
-      isNewArrival: getBooleanParam(searchParams.get("isNewArrival")),
-      inStock: getBooleanParam(searchParams.get("inStock")),
-      baseColor: searchParams.get("baseColor") || undefined,
-      query: searchParams.get("query") || undefined // NEW: Extract the 'query' parameter
-    };
-
-    // Remove undefined keys to keep the filter object clean
-    Object.keys(filters).forEach(key => {
-      if (filters[key as keyof Product.ProductFilterOptions] === undefined) {
-        delete filters[key as keyof Product.ProductFilterOptions];
-      }
-    });
-
-    const result = await getAllProducts(filters);
-    return NextResponse.json(result);
+    const result = await listProducts(params);
+    return NextResponse.json({ success: true, data: result.items, nextCursor: result.nextCursor });
   } catch (error) {
     console.error("Error in /api/products:", error);
     return NextResponse.json({ success: false, error: "Failed to fetch products" }, { status: 500 });
@@ -91,11 +99,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await addProduct(data);
-
-    if (!result.success) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
-    }
+    const productId = await createProduct(data);
+    const product = await getProductById(productId);
 
     // Log activity if the logActivity function is available
     try {
@@ -105,7 +110,7 @@ export async function POST(request: NextRequest) {
         description: `Created product: ${data.name}`,
         status: "success",
         metadata: {
-          productId: result.id,
+          productId,
           productName: data.name,
           price: data.price
         }
@@ -115,7 +120,7 @@ export async function POST(request: NextRequest) {
       // Continue execution even if logging fails
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ success: true, id: productId, product });
   } catch (error) {
     console.error("[POST /api/products]", error);
     let data;

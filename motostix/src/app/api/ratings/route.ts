@@ -81,8 +81,8 @@
 // src/app/api/ratings/route.ts
 
 import { NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore"; // This import is correct for server-side FieldValue
 import * as z from "zod";
+import { rateProduct } from "@/lib/services/products";
 
 // Define the schema for a new rating submission
 const ratingSubmissionSchema = z.object({
@@ -104,54 +104,9 @@ export async function POST(req: Request) {
 
     const { productId, userId, authorName, rating } = validatedData.data;
 
-    // --- CORRECTED FIREBASE ADMIN DB IMPORT ---
-    // Replace this:
-    // const { adminDb } = await import("@/lib/firebase/admin/initialize"); // Dynamically import adminDb
-    // With this:
-    const { getAdminFirestore } = await import("@/lib/firebase/admin/initialize"); // Dynamically import getAdminFirestore
-    // --- END CORRECTED IMPORT ---
+    const result = await rateProduct({ productId, userId, rating, authorName });
 
-    const reviewsRef = getAdminFirestore().collection("reviews"); // Use getAdminFirestore()
-    const productsRef = getAdminFirestore().collection("products"); // Use getAdminFirestore()
-    const productDocRef = productsRef.doc(productId);
-
-    await getAdminFirestore().runTransaction(async transaction => {
-      // Use getAdminFirestore()
-      const productDoc = await transaction.get(productDocRef);
-
-      if (!productDoc.exists) {
-        throw new Error("Product not found.");
-      }
-
-      const productData = productDoc.data();
-      const currentReviewCount = (productData?.reviewCount || 0) as number;
-      const currentAverageRating = (productData?.averageRating || 0) as number;
-
-      // 1. Add the new review document
-      const newReviewDocRef = reviewsRef.doc();
-      const newReview = {
-        productId,
-        userId,
-        authorName,
-        rating,
-        reviewText: "",
-        createdAt: FieldValue.serverTimestamp() // Use serverTimestamp() for consistency and atomic updates
-      };
-      transaction.set(newReviewDocRef, newReview);
-
-      // 2. Calculate new average rating and total count
-      const newTotalRatingSum = currentAverageRating * currentReviewCount + rating;
-      const newReviewCount = currentReviewCount + 1;
-      const newAverageRating = newTotalRatingSum / newReviewCount;
-
-      // 3. Update the product document with new aggregated data
-      transaction.update(productDocRef, {
-        averageRating: newAverageRating,
-        reviewCount: newReviewCount
-      });
-    });
-
-    return NextResponse.json({ message: "Rating submitted successfully!" }, { status: 200 });
+    return NextResponse.json({ message: "Rating submitted successfully!", rating: result }, { status: 200 });
   } catch (error: any) {
     console.error("Failed to submit rating:", error);
     return NextResponse.json(

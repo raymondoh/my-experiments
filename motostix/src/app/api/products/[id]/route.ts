@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server";
-import { getProductById, updateProduct, deleteProduct } from "@/firebase/admin/products";
+import { getProductById as fetchProductById, updateProduct as updateProductService, deleteProduct as deleteProductService } from "@/lib/services/products";
 import { productUpdateSchema } from "@/schemas/product";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/firebase/actions";
@@ -17,14 +17,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     console.log(`[GET /api/products/[id]] Processing for ID: ${id}`);
 
-    const result = await getProductById(id);
-    console.log(`[GET /api/products/[id]] Result from getProductById for ID ${id}:`, result);
+    const product = await fetchProductById(id);
+    console.log(`[GET /api/products/[id]] Result from getProductById for ID ${id}:`, product);
 
-    if (result.success) {
-      return NextResponse.json({ success: true, data: result.product });
-    } else {
-      return NextResponse.json({ success: false, error: result.error }, { status: 404 });
+    if (!product) {
+      return NextResponse.json({ success: false, error: "Product not found" }, { status: 404 });
     }
+
+    return NextResponse.json({ success: true, product });
   } catch (error) {
     console.error("[GET /api/products/[id]] Uncaught error in GET handler:", error);
     return NextResponse.json(
@@ -109,21 +109,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Update the product using the new Firebase admin function
     console.log("🚀 Calling updateProduct with validated data");
-    const result = await updateProduct(id, validated.data);
-    console.log("💾 Update result:", result);
-
-    if (!result.success) {
-      console.log("❌ Update failed:", result.error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error || "Failed to update product",
-          productId: id,
-          timestamp: new Date().toISOString()
-        },
-        { status: 400 }
-      );
-    }
+    await updateProductService(id, validated.data);
+    const updatedProduct = await fetchProductById(id);
+    console.log("💾 Update result:", updatedProduct);
 
     // Log activity for audit trail
     try {
@@ -160,7 +148,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     console.log("✅ Product update completed successfully");
     return NextResponse.json({
       success: true,
-      data: result.data,
+      data: updatedProduct,
       productId: id,
       timestamp: new Date().toISOString()
     });
@@ -237,13 +225,8 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       return NextResponse.json({ success: false, error: "Product ID is required" }, { status: 400 });
     }
 
-    // Delete the product using the new Firebase admin function
-    const result = await deleteProduct(id);
-
-    if (!result.success) {
-      console.log("❌ Delete failed:", result.error);
-      return NextResponse.json({ success: false, error: result.error }, { status: 400 });
-    }
+    // Delete the product using the product service
+    await deleteProductService(id);
 
     // Log activity for audit trail
     try {
