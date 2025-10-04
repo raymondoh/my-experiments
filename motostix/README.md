@@ -97,3 +97,62 @@ Easily extendable for e-commerce, admin dashboards, SaaS, or community apps.
 🙏 Acknowledgments
 Big thanks to the Next.js, Firebase, and open-source communities
 for the tools and inspiration that made this starter possible.
+
+---
+
+## Environment Variables
+
+Environment configuration lives in [`.env.example`](./.env.example). Copy it to `.env.local` and replace each placeholder with the values from your Firebase, Stripe, Google Cloud, and email providers.
+
+| Scope | Key(s) | Notes |
+| --- | --- | --- |
+| Client (`NEXT_PUBLIC_*`) | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY`, Firebase web config | Safe to expose to the browser. Use the Firebase Web App settings and Stripe publishable key. |
+| Server | Stripe + Firebase Admin credentials | Keep private. The Firebase Admin key must retain escaped newlines (e.g. `\n`) in `.env.local`. |
+| Server | NextAuth Google OAuth | Create OAuth credentials in Google Cloud and add your authorized redirect URI (e.g. `http://localhost:3000/api/auth/callback/google`). |
+| Server | Resend + Mailchimp | Required for transactional (Resend) and marketing (Mailchimp) email flows. |
+| Optional | Upstash Redis | Leave commented unless caching/queues are enabled. |
+| SEO | `SITE_URL`, `OG_IMAGE_URL`, `SITE_TWITTER` | Set for production to generate accurate meta tags. |
+
+Run `cp .env.example .env.local` to start from the documented template.
+
+## Local Development (Firebase Emulator)
+
+1. Install the Firebase CLI once: `npm install -g firebase-tools` and authenticate with `firebase login`.
+2. Install project dependencies: `pnpm install`.
+3. In one terminal, start the Firebase emulators for Auth and Firestore:
+   ```bash
+   firebase emulators:start --only auth,firestore
+   ```
+   (If you add Storage, include `--only auth,firestore,storage`).
+4. In another terminal, run the Next.js dev server: `pnpm dev`.
+
+When the emulators are running, add the following overrides to `.env.local` so both the Admin SDK and the browser SDK talk to the local services:
+
+```bash
+# Admin SDK overrides
+FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+FIREBASE_STORAGE_EMULATOR_HOST=127.0.0.1:9199 # optional
+```
+
+The Firebase Web SDK does not automatically read these host variables. In `src/lib/firebase` make sure you call `connectAuthEmulator`, `connectFirestoreEmulator`, and related helpers when `process.env.NODE_ENV !== "production"` or behind a custom flag.
+
+> **Tip:** The repo does not ship with seed scripts. Use the Firebase Emulator UI (http://localhost:4000) or `firebase firestore:import` to load sample data.
+
+## Stripe Webhooks (Dev)
+
+1. Install and log in to the Stripe CLI: `brew install stripe` (or download from Stripe) and `stripe login`.
+2. Forward events to your local API route:
+   ```bash
+   stripe listen --forward-to localhost:3000/api/webhooks/stripe
+   ```
+3. Copy the webhook signing secret displayed by the CLI and place it in `STRIPE_WEBHOOK_SECRET` in `.env.local`.
+4. Use your test keys (`sk_test_*` and `pk_test_*`) while developing. The CLI will replay events each time you run the listener.
+
+## Email (Resend)
+
+Create a project in the [Resend dashboard](https://resend.com) and verify your sending domain. Once verified, generate an API key and save it as `RESEND_API_KEY`. You can add test email addresses in Resend to avoid sending to real users during development.
+
+## Newsletter (Mailchimp)
+
+Generate an API key from the [Mailchimp dashboard](https://usX.admin.mailchimp.com/account/api/) and note the `usX` prefix—it becomes your `MAILCHIMP_SERVER_PREFIX`. Choose or create an audience list and copy its ID (under *Audience settings > Audience name and defaults*) into `MAILCHIMP_AUDIENCE_ID`.
