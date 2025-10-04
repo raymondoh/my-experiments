@@ -1,10 +1,12 @@
 // src/lib/services/user-service.ts
-import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
-import { Timestamp } from "firebase-admin/firestore";
 import type { User, UserRole } from "@/types/user";
-import { isFirebaseError, firebaseError } from "@/utils/firebase-error";
-import { getUserImage } from "@/utils/get-user-image";
 import { createLogger } from "@/lib/logger";
+import {
+  getUserProfile,
+  listUsers,
+  type ListUsersResult,
+  type UserProfile,
+} from "@/lib/services/users";
 
 const log = createLogger("services.user");
 
@@ -25,50 +27,19 @@ export class UserService {
   > {
     "use server";
     try {
-      const db = getAdminFirestore();
-      let query = db.collection("users").orderBy("createdAt", "desc").limit(limit);
+      const result: ListUsersResult = await listUsers({ limit, cursor: startAfter ?? null });
 
-      if (startAfter) {
-        const lastDoc = await db.collection("users").doc(startAfter).get();
-        if (lastDoc.exists) {
-          query = query.startAfter(lastDoc);
-        }
-      }
-
-      const snapshot = await query.get();
-
-      const users: User[] = snapshot.docs.map(doc => {
-        const data = doc.data();
-
-        return {
-          id: doc.id,
-          ...data,
-          image: getUserImage(data),
-          // Properly serialize all timestamp fields
-          createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt,
-          updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : data.updatedAt,
-          lastLoginAt:
-            data.lastLoginAt instanceof Timestamp ? data.lastLoginAt.toDate().toISOString() : data.lastLoginAt,
-          emailVerified:
-            data.emailVerified instanceof Timestamp ? data.emailVerified.toDate().toISOString() : data.emailVerified
-        } as User;
-      });
-
-      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+      const users: User[] = result.items.map(mapProfileToUser);
 
       return {
         success: true,
         data: {
           users,
-          lastVisible: lastVisible?.id
-        }
+          lastVisible: result.nextCursor ?? undefined,
+        },
       };
     } catch (error: unknown) {
-      const message = isFirebaseError(error)
-        ? firebaseError(error)
-        : error instanceof Error
-          ? error.message
-          : "Unknown error occurred while fetching users";
+      const message = error instanceof Error ? error.message : "Unknown error occurred while fetching users";
 
       log.error("get users failed", message);
       return { success: false, error: message };
@@ -87,7 +58,8 @@ export class UserService {
         return { success: false, error: "No authenticated user found" };
       }
 
-      const role = await UserService.getUserRole(session.user.id);
+      const profile = await getUserProfile(session.user.id);
+      const role = profile?.role ?? "user";
 
       return {
         success: true,
@@ -99,18 +71,14 @@ export class UserService {
           displayName: session.user.displayName || "", // Use displayName
           name: session.user.name || "", // Keep for backward compatibility if needed
 
-          email: session.user.email || "",
-          image: getUserImage(session.user),
+          email: session.user.email || profile?.email || "",
+          image: profile?.image ?? session.user.image ?? null,
           role: role,
           bio: session.user.bio || "" // Ensure bio is also passed
         }
       };
     } catch (error) {
-      const message = isFirebaseError(error)
-        ? firebaseError(error)
-        : error instanceof Error
-          ? error.message
-          : "Unknown error getting current user";
+      const message = error instanceof Error ? error.message : "Unknown error getting current user";
 
       return { success: false, error: message };
     }
@@ -120,16 +88,10 @@ export class UserService {
   static async getUserRole(userId: string): Promise<UserRole> {
     "use server";
     try {
-      const db = getAdminFirestore();
-      const userDoc = await db.collection("users").doc(userId).get();
-      const userData = userDoc.data();
-      return (userData?.role as UserRole) || "user";
+      const profile = await getUserProfile(userId);
+      return (profile?.role as UserRole) || "user";
     } catch (error: unknown) {
-      const message = isFirebaseError(error)
-        ? firebaseError(error)
-        : error instanceof Error
-          ? error.message
-          : "Unknown error getting user role";
+      const message = error instanceof Error ? error.message : "Unknown error getting user role";
 
       log.error("get user role failed", message, { userId });
       return "user"; // fallback default
@@ -138,3 +100,16 @@ export class UserService {
 
   // Additional methods would go here...
 }
+
+const mapProfileToUser = (profile: UserProfile): User => {
+  return {
+    id: profile.id,
+    name: profile.name ?? undefined,
+    displayName: profile.name ?? undefined,
+    email: profile.email ?? undefined,
+    image: profile.image ?? undefined,
+    role: profile.role,
+    createdAt: profile.createdAtISO,
+    updatedAt: profile.updatedAtISO,
+  };
+};

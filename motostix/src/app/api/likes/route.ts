@@ -1,173 +1,90 @@
-import { NextResponse } from "next/server";
-import { getUserLikedProducts, likeProduct, unlikeProduct } from "@/firebase/admin/products";
 import { createLogger } from "@/lib/logger";
+import { badRequest, ok, serverError, unauthorized } from "@/lib/http";
+import { getLikedProductIds, likeProduct, unlikeProduct } from "@/lib/services/users";
+import { likeBody } from "@/lib/validation/api";
 
 const log = createLogger("api.likes");
 
 export async function GET() {
   try {
-    // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
     const session = await auth();
 
-    // Check if session and user exist
-    if (!session || !session.user || !session.user.id) {
+    if (!session?.user?.id) {
       log.warn("unauthorized", { method: "GET" });
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized",
-          likedProductIds: [] // Always include this to avoid parsing errors
-        },
-        { status: 401 }
-      );
+      return unauthorized();
     }
 
-    const userId = session.user.id;
-    log.debug("fetching likes", { userId });
-
-    // Get all liked products for the user
-    const result = await getUserLikedProducts(userId);
-
-    if (!result.success) {
-      log.error("fetch failed", result.error, { userId });
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error,
-          likedProductIds: [] // Always include this to avoid parsing errors
-        },
-        { status: 500 }
-      );
-    }
-
-    // Extract just the product IDs for the client
-    const likedProductIds = result.data.map(product => product.id);
-    log.info("likes fetched", { userId, count: likedProductIds.length });
-
-    return NextResponse.json({
-      success: true,
-      likedProductIds
-    });
+    const ids = await getLikedProductIds(session.user.id);
+    return ok({ ids });
   } catch (error) {
     log.error("get failed", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch likes",
-        likedProductIds: [] // Always include this to avoid parsing errors
-      },
-      { status: 500 }
-    );
+    return serverError("Failed to fetch likes");
   }
 }
 
-// POST and DELETE handlers remain the same
 export async function POST(request: Request) {
   try {
-    // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
     const session = await auth();
 
-    // Check if session and user exist
-    if (!session || !session.user || !session.user.id) {
+    if (!session?.user?.id) {
       log.warn("unauthorized", { method: "POST" });
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return unauthorized();
     }
 
-    const userId = session.user.id;
-    log.debug("like requested", { userId });
-
-    // Parse the request body
-    const body = await request.json();
-    const { productId } = body;
-
-    log.debug("payload parsed", { keys: Object.keys(body ?? {}) });
-
-    if (!productId) {
-      log.warn("missing productId", { userId });
-      return NextResponse.json({ success: false, error: "Product ID is required" }, { status: 400 });
+    let json: unknown;
+    try {
+      json = await request.json();
+    } catch {
+      log.warn("invalid json", { method: "POST" });
+      return badRequest("Invalid JSON body");
     }
 
-    // Validate IDs
-    if (typeof userId !== "string" || userId.trim() === "") {
-      log.error("invalid userId", undefined, { userId });
-      return NextResponse.json({ success: false, error: "Invalid user ID" }, { status: 400 });
+    const parsed = likeBody.safeParse(json);
+    if (!parsed.success) {
+      log.warn("invalid body", { issues: parsed.error.flatten() });
+      return badRequest("Invalid request body", parsed.error.flatten());
     }
 
-    if (typeof productId !== "string" || productId.trim() === "") {
-      log.error("invalid productId", undefined, { userId });
-      return NextResponse.json({ success: false, error: "Invalid product ID" }, { status: 400 });
-    }
+    await likeProduct(session.user.id, parsed.data.productId);
 
-    log.info("like create", { userId, productId });
-
-    // Like the product using your Firebase function
-    const result = await likeProduct(userId, productId);
-
-    if (!result.success) {
-      log.error("like failed", result.error, { userId, productId });
-      throw new Error(result.error);
-    }
-
-    return NextResponse.json({ success: true });
+    return ok({});
   } catch (error) {
     log.error("post failed", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to add like"
-      },
-      { status: 500 }
-    );
+    return serverError("Failed to add like");
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
     const session = await auth();
 
-    // Check if session and user exist
-    if (!session || !session.user || !session.user.id) {
+    if (!session?.user?.id) {
       log.warn("unauthorized", { method: "DELETE" });
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+      return unauthorized();
     }
 
-    const userId = session.user.id;
-    log.debug("unlike requested", { userId });
-
-    // Parse the request body
-    const body = await request.json();
-    const { productId } = body;
-
-    log.debug("payload parsed", { keys: Object.keys(body ?? {}) });
-
-    if (!productId) {
-      log.warn("missing productId", { userId });
-      return NextResponse.json({ success: false, error: "Product ID is required" }, { status: 400 });
+    let json: unknown;
+    try {
+      json = await request.json();
+    } catch {
+      log.warn("invalid json", { method: "DELETE" });
+      return badRequest("Invalid JSON body");
     }
 
-    log.info("like delete", { userId, productId });
-
-    // Unlike the product using your Firebase function
-    const result = await unlikeProduct(userId, productId);
-
-    if (!result.success) {
-      log.error("unlike failed", result.error, { userId, productId });
-      throw new Error(result.error);
+    const parsed = likeBody.safeParse(json);
+    if (!parsed.success) {
+      log.warn("invalid body", { issues: parsed.error.flatten() });
+      return badRequest("Invalid request body", parsed.error.flatten());
     }
 
-    return NextResponse.json({ success: true });
+    await unlikeProduct(session.user.id, parsed.data.productId);
+
+    return ok({});
   } catch (error) {
     log.error("delete failed", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to remove like"
-      },
-      { status: 500 }
-    );
+    return serverError("Failed to remove like");
   }
 }

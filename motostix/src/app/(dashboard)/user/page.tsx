@@ -1,6 +1,4 @@
 import { redirect } from "next/navigation";
-import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
-import { parseServerDate } from "@/utils/date-server";
 import type { User, SerializedUser } from "@/types/user";
 import { serializeUser } from "@/utils/serializeUser";
 import { fetchUserActivityLogs } from "@/actions/dashboard";
@@ -11,6 +9,7 @@ import { UserActivityPreview } from "@/components";
 import { Clock, UserIcon } from "lucide-react";
 import type { Firebase } from "@/types";
 import { createLogger } from "@/lib/logger";
+import { getUserProfile } from "@/lib/services/users";
 
 const log = createLogger("dashboard.user.overview");
 
@@ -61,26 +60,21 @@ export default async function UserDashboardOverviewPage() {
     };
 
     try {
-      // Use the new Firebase admin initialization
-      const db = getAdminFirestore();
-      const doc = await db.collection("users").doc(userId).get();
+      const profile = await getUserProfile(userId);
 
-      if (doc.exists) {
-        const firestoreData = doc.data() as Partial<User>;
-
+      if (profile) {
         userData = {
           ...userData,
-          ...firestoreData,
-          createdAt: parseServerDate(firestoreData.createdAt) ?? new Date(),
-          lastLoginAt: parseServerDate(firestoreData.lastLoginAt) ?? new Date(),
-          updatedAt: parseServerDate(firestoreData.updatedAt) ?? new Date(),
-          hasPassword: !!firestoreData.passwordHash || firestoreData.provider !== "google",
-          has2FA: firestoreData.has2FA ?? false
+          name: profile.name ?? userData.name,
+          email: profile.email ?? userData.email,
+          image: profile.image ?? userData.image,
+          role: profile.role ?? userData.role,
+          createdAt: profile.createdAtISO,
+          updatedAt: profile.updatedAtISO ?? profile.createdAtISO,
         };
       }
     } catch (error) {
-      log.error("firestore fetch failed", error, { userId });
-      // Continue with fallback session data
+      log.error("profile fetch failed", error, { userId });
     }
 
     const serializedUserData: SerializedUser = serializeUser(userData);

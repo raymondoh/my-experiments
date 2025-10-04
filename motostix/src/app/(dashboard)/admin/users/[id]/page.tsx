@@ -1,10 +1,11 @@
 import { DashboardShell, DashboardHeader } from "@/components";
 import { Separator } from "@/components/ui/separator";
 import { redirect } from "next/navigation";
-import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
 import { AdminUserTabs } from "@/components/dashboard/admin/users/AdminUserTabs";
 import { serializeUser } from "@/utils/serializeUser";
 import { createLogger } from "@/lib/logger";
+import { getUserProfile } from "@/lib/services/users";
+import type { User } from "@/types/user";
 
 const log = createLogger("dashboard.admin.users.detail");
 
@@ -24,27 +25,27 @@ export default async function AdminUserTabsPage({ params }: { params: Promise<{ 
 
     // 2) Check current user is an admin
     const currentUserId = session.user.id;
-    let isAdmin = false;
-    try {
-      const currentUserDoc = await getAdminFirestore().collection("users").doc(currentUserId).get();
-      if (currentUserDoc.exists && currentUserDoc.data()?.role === "admin") {
-        isAdmin = true;
-      }
-      if (!isAdmin) {
-        redirect("/not-authorized");
-      }
-    } catch (err) {
-      log.error("admin check failed", err, { currentUserId });
+    const adminProfile = await getUserProfile(currentUserId);
+    if (adminProfile?.role !== "admin") {
+      log.warn("admin role required", { currentUserId });
       redirect("/not-authorized");
     }
 
     // 3) Fetch the target user
-    const userDoc = await getAdminFirestore().collection("users").doc(userId).get();
-    if (!userDoc.exists) {
+    const profile = await getUserProfile(userId);
+    if (!profile) {
       redirect("/admin/users");
     }
 
-    const rawData = { id: userDoc.id, ...(userDoc.data() || {}) };
+    const rawData: User = {
+      id: profile.id,
+      name: profile.name ?? undefined,
+      email: profile.email ?? undefined,
+      image: profile.image ?? undefined,
+      role: profile.role,
+      createdAt: profile.createdAtISO,
+      updatedAt: profile.updatedAtISO,
+    };
     const serializedUser = serializeUser(rawData);
 
     // 4) Render the dashboard shell + tabs

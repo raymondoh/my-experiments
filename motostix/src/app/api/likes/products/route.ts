@@ -1,63 +1,34 @@
-import { NextResponse } from "next/server";
-import { getUserLikedProducts } from "@/firebase/admin/products";
+import type { NextRequest } from "next/server";
+
 import { createLogger } from "@/lib/logger";
+import { badRequest, ok, serverError, unauthorized } from "@/lib/http";
+import { getLikedProducts } from "@/lib/services/users";
+import { listLikedProductsQuery, parseSearchParams } from "@/lib/validation/api";
 
 const log = createLogger("api.likes.products");
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
-
-    // Get the session using auth()
     const session = await auth();
 
-    // Check if session and user exist
-    if (!session || !session.user || !session.user.id) {
-      log.warn("unauthorized", { reason: "no-session" });
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Unauthorized",
-          products: [] // Always include this to avoid parsing errors
-        },
-        { status: 401 }
-      );
+    if (!session?.user?.id) {
+      log.warn("unauthorized", { method: "GET" });
+      return unauthorized();
     }
 
-    const userId = session.user.id;
-    log.debug("fetching liked products", { userId });
-
-    // Get all liked products for the user
-    const result = await getUserLikedProducts(userId);
-
-    if (!result.success) {
-      log.error("fetch failed", result.error, { userId });
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error,
-          products: [] // Always include this to avoid parsing errors
-        },
-        { status: 500 }
-      );
+    const parsed = parseSearchParams(listLikedProductsQuery, request.nextUrl.searchParams);
+    if (!parsed.success) {
+      log.warn("invalid query", { issues: parsed.error.flatten() });
+      return badRequest("Invalid query parameters", parsed.error.flatten());
     }
 
-    log.info("liked products fetched", { userId, count: result.data.length });
+    const { limit, cursor } = parsed.data;
+    const result = await getLikedProducts(session.user.id, { limit, cursor: cursor ?? null });
 
-    return NextResponse.json({
-      success: true,
-      products: result.data
-    });
+    return ok(result);
   } catch (error) {
-    log.error("unexpected error", error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : "Failed to fetch liked products",
-        products: [] // Always include this to avoid parsing errors
-      },
-      { status: 500 }
-    );
+    log.error("get failed", error);
+    return serverError("Failed to fetch liked products");
   }
 }
