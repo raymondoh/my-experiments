@@ -1,15 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { uploadFile } from "@/lib/services/storage-service";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api.upload");
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("Upload API route called");
+    log.info("upload start");
 
     // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
     const session = await auth();
 
     if (!session || !session.user || !session.user.id) {
+      log.warn("unauthorized", { reason: "no-session" });
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -17,6 +21,7 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File;
 
     if (!file) {
+      log.warn("no file provided", { userId: session.user.id });
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
@@ -28,12 +33,14 @@ export async function POST(request: NextRequest) {
     });
 
     if (result.success) {
+      log.info("upload success", { userId: session.user.id });
       return NextResponse.json({ url: result.url });
     } else {
+      log.warn("upload failed", { userId: session.user.id, error: result.error });
       return NextResponse.json({ error: result.error }, { status: result.status });
     }
   } catch (error) {
-    console.error("Upload route error:", error);
+    log.error("upload error", error);
 
     if (error instanceof Error) {
       return NextResponse.json({ error: `Upload failed: ${error.message}` }, { status: 500 });

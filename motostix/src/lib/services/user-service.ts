@@ -4,6 +4,9 @@ import { Timestamp } from "firebase-admin/firestore";
 import type { User, UserRole } from "@/types/user";
 import { isFirebaseError, firebaseError } from "@/utils/firebase-error";
 import { getUserImage } from "@/utils/get-user-image";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("services.user");
 
 // Types for service responses
 type ServiceResponse<T> = { success: true; data: T } | { success: false; error: string };
@@ -67,7 +70,7 @@ export class UserService {
           ? error.message
           : "Unknown error occurred while fetching users";
 
-      console.error("Error fetching users:", message);
+      log.error("get users failed", message);
       return { success: false, error: message };
     }
   }
@@ -128,7 +131,7 @@ export class UserService {
           ? error.message
           : "Unknown error getting user role";
 
-      console.error("Error getting user role:", message);
+      log.error("get user role failed", message, { userId });
       return "user"; // fallback default
     }
   }

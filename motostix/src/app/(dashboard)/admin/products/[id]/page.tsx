@@ -4,6 +4,9 @@ import { DashboardShell, DashboardHeader } from "@/components";
 import { UpdateProductForm } from "@/components/dashboard/admin/products/UpdateProductForm";
 import { getProductByIdAction } from "@/actions/products/get-product";
 import { UserService } from "@/lib/services/user-service";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.products.edit");
 
 export default async function AdminProductEditPage({ params }: { params: Promise<{ id: string }> }) {
   try {
@@ -58,7 +61,7 @@ export default async function AdminProductEditPage({ params }: { params: Promise
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminProductEditPage:", error);
+    log.error("failed", error);
     redirect("/admin/products");
   }
 }

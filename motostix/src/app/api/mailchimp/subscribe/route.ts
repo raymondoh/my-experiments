@@ -5,6 +5,7 @@
 import { NextResponse } from "next/server";
 import mailchimp from "@mailchimp/mailchimp_marketing";
 import * as z from "zod";
+import { createLogger } from "@/lib/logger";
 
 mailchimp.setConfig({
   apiKey: process.env.MAILCHIMP_API_KEY,
@@ -12,6 +13,8 @@ mailchimp.setConfig({
 });
 
 const audienceId = process.env.MAILCHIMP_AUDIENCE_ID!;
+
+const log = createLogger("api.mailchimp.subscribe");
 
 const subscribeSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." })
@@ -30,6 +33,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Invalid email address." }, { status: 400 });
     }
 
+    log.info("subscription attempt");
+
     // --- THIS IS THE NEW LOGIC ---
     // We assume this call will either succeed and return a valid member object,
     // or it will throw an error which will be handled by our catch block.
@@ -42,11 +47,13 @@ export async function POST(req: Request) {
     // Explicitly cast 'response' to 'mailchimp.lists.MembersSuccessResponse'
     // to assure TypeScript that 'id' will exist here.
     const memberId = (response as mailchimp.lists.MembersSuccessResponse).id;
+    log.info("subscription success", { memberId });
     return NextResponse.json({ message: "Thank you for subscribing!", memberId: memberId }, { status: 200 });
     // ----------------------------
   } catch (error: any) {
     // Check if the error is because the member already exists.
     if (error.response?.body?.title === "Member Exists") {
+      log.warn("subscriber exists");
       return NextResponse.json(
         { message: "You are already subscribed!" },
         { status: 200 } // Return 200 OK because it's not a server failure.
@@ -54,7 +61,7 @@ export async function POST(req: Request) {
     }
 
     // Handle all other errors.
-    console.error("Mailchimp API Error:", error.response?.body || error);
+    log.error("mailchimp error", error.response?.body || error);
     return NextResponse.json({ error: "Failed to subscribe. Please try again." }, { status: 500 });
   }
 }

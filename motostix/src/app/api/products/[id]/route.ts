@@ -3,10 +3,13 @@ import { getProductById as fetchProductById, updateProduct as updateProductServi
 import { productUpdateSchema } from "@/schemas/product";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/firebase/actions";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api.products.id");
 
 // GET - Fetch a single product by ID
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  console.log("[GET /api/products/[id]] Handler invoked.");
+  log.debug("GET invoked");
   try {
     // Await params in Next.js 15
     const { id } = await params;
@@ -15,10 +18,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       return NextResponse.json({ success: false, error: "Product ID is required" }, { status: 400 });
     }
 
-    console.log(`[GET /api/products/[id]] Processing for ID: ${id}`);
+    log.debug("fetching product", { productId: id });
 
     const product = await fetchProductById(id);
-    console.log(`[GET /api/products/[id]] Result from getProductById for ID ${id}:`, product);
+    log.debug("product fetched", { productId: id, found: !!product });
 
     if (!product) {
       return NextResponse.json({ success: false, error: "Product not found" }, { status: 404 });
@@ -26,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
     return NextResponse.json({ success: true, product });
   } catch (error) {
-    console.error("[GET /api/products/[id]] Uncaught error in GET handler:", error);
+    log.error("get failed", error);
     return NextResponse.json(
       {
         error: error instanceof Error ? error.message : "Failed to fetch product"
@@ -41,20 +44,20 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   try {
     // Await params for Next.js 15 compatibility
     const { id } = await params;
-    console.log("🔧 PUT /api/products/[id] - Starting update for product:", id);
+    log.info("update start", { productId: id });
 
     // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
     const session = await auth();
 
     if (!session?.user) {
-      console.log("❌ Unauthorized - no session");
+      log.warn("unauthorized", { reason: "no-session" });
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
     // Check if user has permission (admin only for product updates)
     if (session.user.role !== "admin") {
-      console.log("❌ Forbidden - user is not admin");
+      log.warn("forbidden", { userId: session.user.id, role: session.user.role });
       return NextResponse.json({ success: false, error: "Forbidden: Admin access required" }, { status: 403 });
     }
 
@@ -62,9 +65,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     let body: any;
     try {
       body = await request.json();
-      console.log("📝 Update data received:", JSON.stringify(body, null, 2));
+      log.debug("payload parsed", { keys: body ? Object.keys(body) : [] });
     } catch (parseError) {
-      console.error("❌ Failed to parse request JSON:", parseError);
+      log.warn("payload parse failed", {
+        error: parseError instanceof Error ? parseError.message : String(parseError),
+      });
       return NextResponse.json(
         {
           success: false,
@@ -76,21 +81,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     }
 
     // Log specific fields for debugging
-    if (body.name) {
-      console.log(`📝 Attempting to update product name to: "${body.name}"`);
+    if (body?.name) {
+      log.debug("update name requested", { productId: id });
     }
 
-    console.log("🏷️ Sale fields:", {
-      onSale: body.onSale,
-      salePrice: body.salePrice,
-      price: body.price
+    log.debug("sale fields", {
+      onSale: body?.onSale,
+      salePrice: body?.salePrice,
+      price: body?.price,
     });
 
     // Validate the request body against the schema
     const validated = productUpdateSchema.safeParse(body);
 
     if (!validated.success) {
-      console.error("❌ Validation error:", validated.error);
+      log.error("validation failed", validated.error, {
+        issueCount: validated.error.errors.length,
+        productId: id,
+      });
       return NextResponse.json(
         {
           success: false,
@@ -104,14 +112,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
     // Log the validated data
     if (validated.data.name) {
-      console.log(`✅ Validated product name: "${validated.data.name}"`);
+      log.debug("validated name", { productId: id });
     }
 
     // Update the product using the new Firebase admin function
-    console.log("🚀 Calling updateProduct with validated data");
+    log.debug("updating product", { productId: id });
     await updateProductService(id, validated.data);
     const updatedProduct = await fetchProductById(id);
-    console.log("💾 Update result:", updatedProduct);
+    log.info("update success", {
+      productId: id,
+      userId: session.user.id,
+      updatedFields: Object.keys(validated.data),
+    });
 
     // Log activity for audit trail
     try {
@@ -129,7 +141,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         }
       });
     } catch (logError) {
-      console.error("⚠️ Failed to log activity:", logError);
+      log.error("activity log failed", logError, { productId: id });
       // Continue execution even if logging fails
     }
 
@@ -141,11 +153,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       revalidatePath("/products");
       revalidatePath("/"); // Home page might show featured products
     } catch (revalidateError) {
-      console.error("⚠️ Failed to revalidate paths:", revalidateError);
+      log.warn("revalidate failed", {
+        productId: id,
+        error: revalidateError instanceof Error ? revalidateError.message : String(revalidateError),
+      });
       // Continue execution even if revalidation fails
     }
 
-    console.log("✅ Product update completed successfully");
+    log.info("update completed", { productId: id });
     return NextResponse.json({
       success: true,
       data: updatedProduct,
@@ -153,7 +168,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error("💥 [PUT /api/products/[id]] Unexpected error:", error);
+    log.error("update failed", error);
 
     // Prepare error response
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -172,7 +187,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
       const { id } = await params;
       errorDetails.productId = id;
     } catch (paramError) {
-      console.error("Could not get product ID from params:", paramError);
+      log.warn("param resolution failed", {
+        error: paramError instanceof Error ? paramError.message : String(paramError),
+      });
     }
 
     // Log activity for failed update
@@ -192,7 +209,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         });
       }
     } catch (logError) {
-      console.error("Failed to log error activity:", logError);
+      log.error("activity log failed", logError, { phase: "error" });
     }
 
     return NextResponse.json(errorDetails, { status: 500 });
@@ -204,20 +221,20 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   try {
     // Await params for Next.js 15 compatibility
     const { id } = await params;
-    console.log("🗑️ DELETE /api/products/[id] - Starting deletion for product:", id);
+    log.info("delete start", { productId: id });
 
     // Dynamic import to avoid build-time initialization
     const { auth } = await import("@/auth");
     const session = await auth();
 
     if (!session?.user) {
-      console.log("❌ Unauthorized - no session");
+      log.warn("unauthorized", { reason: "no-session" });
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
     // Check if user has permission (admin only for product deletion)
     if (session.user.role !== "admin") {
-      console.log("❌ Forbidden - user is not admin");
+      log.warn("forbidden", { userId: session.user.id, role: session.user.role });
       return NextResponse.json({ success: false, error: "Forbidden: Admin access required" }, { status: 403 });
     }
 
@@ -240,7 +257,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         }
       });
     } catch (logError) {
-      console.error("⚠️ Failed to log activity:", logError);
+      log.error("activity log failed", logError, { productId: id, action: "delete" });
       // Continue execution even if logging fails
     }
 
@@ -250,11 +267,15 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       revalidatePath("/products");
       revalidatePath("/"); // Home page might show featured products
     } catch (revalidateError) {
-      console.error("⚠️ Failed to revalidate paths:", revalidateError);
+      log.warn("revalidate failed", {
+        productId: id,
+        action: "delete",
+        error: revalidateError instanceof Error ? revalidateError.message : String(revalidateError),
+      });
       // Continue execution even if revalidation fails
     }
 
-    console.log("✅ Product deletion completed successfully");
+    log.info("delete completed", { productId: id });
     return NextResponse.json({
       success: true,
       message: "Product deleted successfully",
@@ -262,7 +283,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error("💥 [DELETE /api/products/[id]] Unexpected error:", error);
+    log.error("delete failed", error);
 
     // Prepare error response
     const errorMessage = error instanceof Error ? error.message : "Failed to delete product";
@@ -281,7 +302,9 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       const { id } = await params;
       errorDetails.productId = id;
     } catch (paramError) {
-      console.error("Could not get product ID from params:", paramError);
+      log.warn("param resolution failed", {
+        error: paramError instanceof Error ? paramError.message : String(paramError),
+      });
     }
 
     // Log activity for failed deletion
@@ -301,7 +324,7 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
         });
       }
     } catch (logError) {
-      console.error("Failed to log error activity:", logError);
+      log.error("activity log failed", logError, { phase: "error" });
     }
 
     return NextResponse.json(errorDetails, { status: 500 });

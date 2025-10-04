@@ -152,6 +152,7 @@ import { getProductById } from "@/firebase/admin/products";
 import type { OrderData } from "@/types/order";
 import { formatPrice } from "@/lib/utils";
 import { TAX_RATE, SHIPPING_CONFIG } from "@/config/checkout"; // Ensure TAX_RATE and SHIPPING_CONFIG are imported
+import { createLogger } from "@/lib/logger";
 
 // Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -160,6 +161,8 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 // Initialize Resend with your API key
 const resend = new Resend(process.env.RESEND_API_KEY);
+
+const log = createLogger("api.webhooks.stripe");
 
 // IMPORTANT: Define your Stripe webhook secret
 const webhookSecret: string = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -172,20 +175,20 @@ export async function POST(req: Request) {
 
   try {
     event = stripe.webhooks.constructEvent(body, signature!, webhookSecret);
-    console.log(`✅ Webhook received: ${event.type}`);
+    log.info("event received", { type: event.type });
   } catch (err: any) {
-    console.error(`❌ Webhook signature verification failed: ${err.message}`);
+    log.error("signature verification failed", err);
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
   switch (event.type) {
     case "payment_intent.succeeded":
       const paymentIntentSucceeded = event.data.object as Stripe.PaymentIntent;
-      console.log(`💰 PaymentIntent succeeded: ${paymentIntentSucceeded.id}`);
+      log.info("payment_intent succeeded", { paymentIntentId: paymentIntentSucceeded.id });
       try {
         const shipping = paymentIntentSucceeded.shipping;
         if (!shipping) {
-          console.error("🚫 Missing shipping information on PaymentIntent");
+          log.error("missing shipping", undefined, { paymentIntentId: paymentIntentSucceeded.id });
           return new NextResponse("Missing shipping information", { status: 400 });
         }
 
@@ -194,15 +197,18 @@ export async function POST(req: Request) {
           if (paymentIntentSucceeded.metadata?.items) {
             rawItems = JSON.parse(paymentIntentSucceeded.metadata.items);
             if (!Array.isArray(rawItems)) {
-              console.error("Metadata items is not an array:", rawItems);
+              log.error("metadata items invalid", undefined, { paymentIntentId: paymentIntentSucceeded.id });
               rawItems = [];
             }
           }
         } catch (parseError) {
-          console.error("Failed to parse metadata items JSON:", parseError);
+          log.error("metadata parse failed", parseError, { paymentIntentId: paymentIntentSucceeded.id });
           rawItems = [];
         }
-        console.log("Raw items from metadata:", rawItems);
+        log.debug("raw items parsed", {
+          paymentIntentId: paymentIntentSucceeded.id,
+          itemCount: rawItems.length,
+        });
 
         const items: OrderData["items"] = [];
         let calculatedSubtotal = 0; // This variable will now be used
@@ -210,7 +216,7 @@ export async function POST(req: Request) {
         for (const item of rawItems) {
           const productResult = await getProductById(item.id);
           if (!productResult.success || !productResult.product) {
-            console.error(`Product with ID ${item.id} not found when creating order. Skipping item.`);
+            log.warn("product missing", { productId: item.id });
             continue;
           }
           const product = productResult.product;
@@ -227,7 +233,7 @@ export async function POST(req: Request) {
         }
 
         if (items.length === 0) {
-          console.error("No valid items found from metadata to create order.");
+          log.error("no valid items", undefined, { paymentIntentId: paymentIntentSucceeded.id });
           return new NextResponse("No valid items for order", { status: 400 });
         }
 
@@ -257,12 +263,14 @@ export async function POST(req: Request) {
 
         const result = await createOrder(orderData);
         if (!result.success) {
-          console.error("❌ Failed to create order:", result.error);
+          log.error("order creation failed", result.error, {
+            paymentIntentId: paymentIntentSucceeded.id,
+          });
           return new NextResponse(`Failed to create order: ${result.error}`, { status: 500 });
         } else {
           // FIX: Use non-null assertion for result.orderId! since result.success is true
           const orderId = result.orderId!;
-          console.log(`✅ Order ${orderId} created from webhook.`);
+          log.info("order created", { orderId, paymentIntentId: paymentIntentSucceeded.id });
 
           try {
             const customerEmail = orderData.customerEmail;
@@ -294,39 +302,39 @@ export async function POST(req: Request) {
                         <p>Thanks,<br/>Your Store Name Team</p>
                     `
               });
-              console.log(`📧 Order confirmation email sent to ${customerEmail}`);
+              log.info("order confirmation sent", { orderId, hasEmail: true });
             } else {
-              console.warn("No customer email found for order confirmation.");
+              log.warn("order confirmation missing email", { orderId });
             }
           } catch (emailError: any) {
-            console.error("❌ Failed to send order confirmation email:", emailError);
+            log.error("order confirmation failed", emailError, { orderId });
           }
 
           return new NextResponse("Order created", { status: 200 });
         }
       } catch (hookErr: any) {
-        console.error("❌ Webhook order handling error:", hookErr);
+        log.error("webhook handling error", hookErr);
         return new NextResponse(`Webhook order handling error: ${hookErr.message}`, { status: 500 });
       }
 
     case "checkout.session.completed":
       const checkoutSessionCompleted = event.data.object as Stripe.Checkout.Session;
-      console.log(`✅ Checkout Session completed: ${checkoutSessionCompleted.id}`);
+      log.info("checkout session completed", { checkoutSessionId: checkoutSessionCompleted.id });
       return new NextResponse("Checkout Session handled", { status: 200 });
 
     case "payment_intent.payment_failed":
       const paymentIntentFailed = event.data.object as Stripe.PaymentIntent;
-      console.log(`❌ PaymentIntent failed: ${paymentIntentFailed.id}`);
+      log.warn("payment_intent failed", { paymentIntentId: paymentIntentFailed.id });
       return new NextResponse("Payment failed handled", { status: 200 });
 
     case "charge.succeeded":
     case "charge.updated":
     case "payment_intent.created":
-      console.log(`Unhandled event type: ${event.type}`);
+      log.debug("event unhandled", { type: event.type });
       return new NextResponse(`Unhandled event type: ${event.type}`, { status: 200 });
 
     default:
-      console.warn(`Unhandled event type: ${event.type}`);
+      log.warn("event unhandled", { type: event.type });
       return new NextResponse(`Unhandled event type: ${event.type}`, { status: 200 });
   }
 }

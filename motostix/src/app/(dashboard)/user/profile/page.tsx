@@ -5,6 +5,9 @@ import { UserProfileForm } from "@/components/auth/UserProfileForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 import { UserService } from "@/lib/services/user-service";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.profile");
 
 export default async function UserProfilePage() {
   try {
@@ -22,7 +25,7 @@ export default async function UserProfilePage() {
 
     // Handle error case
     if (!userResult.success) {
-      console.error("Error getting current user:", userResult.error);
+      log.error("get current user failed", userResult.error);
       return (
         <DashboardShell>
           <DashboardHeader
@@ -58,7 +61,7 @@ export default async function UserProfilePage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in UserProfilePage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

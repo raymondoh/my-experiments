@@ -2,6 +2,9 @@ import type React from "react";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/siteConfig";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.layout");
 
 export const metadata: Metadata = {
   // User-specific title template
@@ -74,7 +77,7 @@ export default async function UserLayout({ children }: { children: React.ReactNo
 
     return <div className="user-container">{children}</div>;
   } catch (error) {
-    console.error("Error in UserLayout:", error);
+    log.error("failed", error);
     redirect("/not-authorized");
   }
 }

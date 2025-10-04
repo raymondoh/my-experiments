@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { DashboardShell, DashboardHeader } from "@/components";
 import { Separator } from "@/components/ui/separator";
 import { UserOrdersClient } from "@/components/dashboard/user/orders/UserOrdersClient";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.user.orders");
 
 export const metadata: Metadata = {
   title: "Your Orders | MotoStix",
@@ -35,7 +38,7 @@ export default async function UserOrdersPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in UserOrdersPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }

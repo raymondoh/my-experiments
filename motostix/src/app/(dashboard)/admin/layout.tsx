@@ -3,6 +3,9 @@ import type React from "react";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/siteConfig";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.layout");
 
 export const metadata: Metadata = {
   // Admin-specific title template
@@ -96,7 +99,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
     return <div className="admin-container">{children}</div>;
   } catch (error) {
-    console.error("Error in AdminLayout:", error);
+    log.error("failed", error);
     redirect("/not-authorized");
   }
 }

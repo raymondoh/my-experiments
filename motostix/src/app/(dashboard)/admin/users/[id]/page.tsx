@@ -4,6 +4,9 @@ import { redirect } from "next/navigation";
 import { getAdminFirestore } from "@/lib/firebase/admin/initialize";
 import { AdminUserTabs } from "@/components/dashboard/admin/users/AdminUserTabs";
 import { serializeUser } from "@/utils/serializeUser";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.users.detail");
 
 export default async function AdminUserTabsPage({ params }: { params: Promise<{ id: string }> }) {
   try {
@@ -31,7 +34,7 @@ export default async function AdminUserTabsPage({ params }: { params: Promise<{ 
         redirect("/not-authorized");
       }
     } catch (err) {
-      console.error("Error checking admin status:", err);
+      log.error("admin check failed", err, { currentUserId });
       redirect("/not-authorized");
     }
 
@@ -65,7 +68,7 @@ export default async function AdminUserTabsPage({ params }: { params: Promise<{ 
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminUserTabsPage:", error);
+    log.error("failed", error, { userId });
     redirect("/login");
   }
 }

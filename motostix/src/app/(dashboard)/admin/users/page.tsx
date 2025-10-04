@@ -5,6 +5,9 @@ import { UsersClient } from "@/components/dashboard/admin/users/UsersClient";
 import { redirect } from "next/navigation";
 import { UserService } from "@/lib/services/user-service";
 import type { SerializedUser } from "@/types/user/common";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("dashboard.admin.users");
 
 export const metadata: Metadata = {
   title: "Manage Users - Admin",
@@ -33,7 +36,7 @@ export default async function AdminUsersPage() {
     const usersResult = await UserService.getUsers(10);
 
     if (!usersResult.success) {
-      console.error("Error fetching users:", usersResult.error);
+      log.error("fetch users failed", usersResult.error);
       return (
         <DashboardShell>
           <DashboardHeader
@@ -48,7 +51,7 @@ export default async function AdminUsersPage() {
     }
 
     const users = usersResult.data.users as SerializedUser[];
-    console.log("🚀 Fetched users:", users.length);
+    log.debug("fetched users", { count: users.length });
 
     return (
       <DashboardShell>
@@ -65,7 +68,7 @@ export default async function AdminUsersPage() {
       </DashboardShell>
     );
   } catch (error) {
-    console.error("Error in AdminUsersPage:", error);
+    log.error("failed", error);
     redirect("/login");
   }
 }
