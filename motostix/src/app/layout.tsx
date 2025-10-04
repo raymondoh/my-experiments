@@ -2,68 +2,38 @@
 import type React from "react";
 import type { Metadata } from "next";
 
-import { siteConfig } from "@/config/siteConfig";
+import { baseMetadata } from "@/lib/seo";
+import { siteConfig } from "@/lib/siteConfig";
 import { ClientLayout } from "./client-layout";
 import "./globals.css";
 
-const rawMetadataBase = process.env.NEXT_PUBLIC_APP_URL ?? "/";
-const metadataBase =
-  rawMetadataBase === "/"
-    ? undefined
-    : (() => {
-        try {
-          return new URL(rawMetadataBase);
-        } catch (error) {
-          console.warn("Invalid NEXT_PUBLIC_APP_URL, skipping metadataBase", error);
-          return undefined;
-        }
-      })();
-
-const ogImage = process.env.OG_IMAGE_URL ?? siteConfig.ogImage;
-
-export const metadata: Metadata = {
-  // ✅ Site-wide defaults belong here. Use export const metadata or generateMetadata inside a page/route to override per-view values.
-  title: {
-    default: siteConfig.name,
-    template: `%s | ${siteConfig.name}`
-  },
-  description: siteConfig.description,
-  metadataBase,
-  openGraph: {
-    title: siteConfig.name,
-    description: siteConfig.description,
-    url: siteConfig.url,
-    siteName: siteConfig.name,
-    images: ogImage
-      ? [
-          {
-            url: ogImage,
-            width: 1200,
-            height: 630,
-            alt: siteConfig.name
-          }
-        ]
-      : undefined,
-    type: "website"
-  },
-  twitter: {
-    card: "summary_large_image",
-    site: siteConfig.twitter || undefined,
-    title: siteConfig.name,
-    description: siteConfig.description,
-    images: ogImage ? [ogImage] : undefined
-  },
-  icons: {
-    icon: "/favicon.ico",
-    shortcut: "/favicon-16x16.png",
-    apple: "/apple-touch-icon.png"
-  }
-};
+export const metadata: Metadata = baseMetadata();
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="relative">
+      <body className="relative" data-site-name={siteConfig.name}>
+        {/**
+         * Example header using the shared navigation config if you ever need to render
+         * it here instead of inside <ClientLayout />:
+         * <header>
+         *   <nav>
+         *     <ul className="flex gap-4">
+         *       {siteConfig.nav.map((item) => (
+         *         <li key={item.href}>
+         *           <a
+         *             href={item.href}
+         *             target={item.external ? "_blank" : undefined}
+         *             rel={item.external ? "noreferrer" : undefined}
+         *           >
+         *             {item.label}
+         *           </a>
+         *         </li>
+         *       ))}
+         *     </ul>
+         *   </nav>
+         * </header>
+         */}
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
