@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { siteConfig } from "@/config/siteConfig";
 import { PageHeader } from "@/components/shared/PageHeader";
-import Image from "next/image"; // Keep if used in other parts of the page not shown
 import { Mail } from "lucide-react"; // Keep if used
 import Link from "next/link"; // Keep if used
 
 import { ProductCarousel } from "@/components/shared/ProductCarousel"; // Your import for the carousel
+import { Button } from "@/components/ui/button";
 import type { Product } from "@/types/product";
 
 export const metadata: Metadata = {
@@ -124,6 +124,16 @@ export default function AboutPage() {
             title="About MotoStix"
             subtitle="Driven by passion, crafted with precision. Discover the story behind your favorite stickers."
           />
+          <div className="mt-8 flex flex-wrap items-center gap-4">
+            <Button variant="secondary" size="lg">
+              Shop now
+            </Button>
+            <Button variant="outline" size="lg" asChild>
+              <Link href="/products">
+                Browse catalog
+              </Link>
+            </Button>
+          </div>
 
           {/* Introduction / My Story Section (Now left-aligned content) */}
           <div className="max-w-4xl mx-auto mt-16">
