@@ -15,6 +15,19 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("api.webhooks.stripe");
 const stripe = getStripeServer();
+const STRIPE_EVENTS_COLLECTION = "stripe_events";
+
+const hasProcessedStripeEvent = async (eventId: string): Promise<boolean> => {
+  if (!eventId) {
+    return false;
+  }
+
+  const db = getAdminFirestore();
+  const ref = db.collection(STRIPE_EVENTS_COLLECTION).doc(eventId);
+  const existing = await ref.get();
+
+  return existing.exists;
+};
 
 const normalizeMetadata = (
   metadata: Stripe.Metadata | null | undefined,
@@ -149,6 +162,12 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const alreadyProcessed = await hasProcessedStripeEvent(event.id);
+    if (alreadyProcessed) {
+      log.info("duplicate stripe event ignored", { eventId: event.id, eventType: event.type });
+      return NextResponse.json({ received: true, duplicate: true });
+    }
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
