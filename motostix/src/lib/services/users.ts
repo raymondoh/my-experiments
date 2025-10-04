@@ -19,6 +19,7 @@ export interface UserProfile {
   createdAtISO: string;
   updatedAtISO?: string;
   role?: "user" | "admin";
+  lastLoginAtISO?: string;
 }
 
 export interface ListUsersParams {
@@ -147,6 +148,15 @@ const toUserProfile = (
 
   const createdAtISO = toISO(createdAtSource) ?? new Date().toISOString();
   const updatedAtISO = toISO(updatedAtSource);
+  const lastLoginAtISO = toISO(
+    data.lastLoginAt ??
+      data.lastLoginAtISO ??
+      data.lastLogin ??
+      data.lastSignInAt ??
+      data.lastSignInAtISO ??
+      data.lastSeenAt ??
+      data.lastSeenAtISO,
+  );
 
   const email = typeof data.email === "string" ? data.email : null;
   const image = getUserImage(data) ?? null;
@@ -164,6 +174,7 @@ const toUserProfile = (
     createdAtISO,
     updatedAtISO,
     role,
+    lastLoginAtISO,
   };
 };
 
