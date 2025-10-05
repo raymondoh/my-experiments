@@ -187,3 +187,21 @@ Create a project in the [Resend dashboard](https://resend.com) and verify your s
 ## Newsletter (Mailchimp)
 
 Generate an API key from the [Mailchimp dashboard](https://usX.admin.mailchimp.com/account/api/) and note the `usX` prefix—it becomes your `MAILCHIMP_SERVER_PREFIX`. Choose or create an audience list and copy its ID (under *Audience settings > Audience name and defaults*) into `MAILCHIMP_AUDIENCE_ID`.
+
+## Deploy Checklist
+- [ ] `NEXT_PUBLIC_*` client envs set (see `.env.example`)
+- [ ] Server secrets set: Stripe, Firebase Admin, NextAuth Google, Resend, Mailchimp
+- [ ] `STRIPE_WEBHOOK_SECRET` added in production
+- [ ] Image domains configured in `next.config.ts`
+- [ ] (If Vercel) Project → Settings → Build & Development:
+      - Install Command: `npm ci`
+      - Build Command: `npm run build`
+      - Output: `.next`
+- [ ] (If self-host) Run `npm run build && npm start` under Node 20
+- [ ] Firebase Emulator used only in local dev
+- [ ] Debug routes (`/debug/*`) blocked in prod (guarded)
+- [ ] Admin access confirmed; non-admin blocked from `/dashboard/admin`
+- [ ] Stripe webhooks configured:
+      ```bash
+      stripe listen --forward-to https://YOUR_DOMAIN/api/webhooks/stripe
+      ```
