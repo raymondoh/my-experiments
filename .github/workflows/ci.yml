@@ -25,6 +25,15 @@ jobs:
         working-directory: motostix
         run: npm ci
 
+      - name: Cache Next.js
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/motostix/.next/cache
+          key: ${{ runner.os }}-next-${{ hashFiles('motostix/**/package-lock.json', 'motostix/**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-next-
+
       - name: Lint
         working-directory: motostix
         run: npm run lint

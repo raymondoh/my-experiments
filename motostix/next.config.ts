@@ -8,6 +8,12 @@ const nextConfig: NextConfig = {
     ignoreDuringBuilds: true
   },
   reactStrictMode: true,
+  swcMinify: true,
+  experimental: {
+    serverActions: {
+      allowedOrigins: ["*"]
+    }
+  },
   webpack: config => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
@@ -34,6 +40,8 @@ const nextConfig: NextConfig = {
     return config;
   },
   serverExternalPackages: ["firebase-admin"],
+  // Stripe/Firebase Admin SDKs rely on Node APIs, so keep the default runtime.
+  // runtime: "nodejs",
   images: {
     remotePatterns: [
       {
@@ -43,25 +51,21 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "lh3.googleusercontent.com",
+        hostname: "**.googleusercontent.com",
         pathname: "/**"
       },
       {
         protocol: "https",
-        hostname: "lh4.googleusercontent.com",
+        hostname: "**.stripe.com",
         pathname: "/**"
       },
       {
         protocol: "https",
-        hostname: "lh5.googleusercontent.com",
-        pathname: "/**"
-      },
-      {
-        protocol: "https",
-        hostname: "lh6.googleusercontent.com",
+        hostname: "**.images.unsplash.com",
         pathname: "/**"
       }
-    ]
+    ],
+    formats: ["image/avif", "image/webp"]
   },
   async headers() {
     const securityHeaders = [
